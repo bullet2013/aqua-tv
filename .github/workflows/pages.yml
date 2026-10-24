@@ -1,0 +1,47 @@
+name: AQUA TV — сайт и компактный EPG
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '27 4 * * *' # UTC: раз в сутки. Возможны задержки GitHub.
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: aqua-tv-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Синхронизировать плейлист (если задан AQUA_PLAYLIST_URL)
+        env:
+          AQUA_PLAYLIST_URL: ${{ vars.AQUA_PLAYLIST_URL }}
+        run: node tools/sync-playlist.mjs
+      - name: Подготовить сокращённый XMLTV с описаниями
+        env:
+          AQUA_EPG_URL: ${{ vars.AQUA_EPG_URL }}
+        run: node tools/epg-update.mjs
+      - name: Настроить GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Загрузить сайт и подготовленный EPG
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Опубликовать GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
