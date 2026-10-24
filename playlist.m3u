@@ -1,0 +1,21 @@
+#EXTM3U url-tvg="https://iptvx.one/EPG_LITE"
+#EXTINF:0 group-title="Детские" tvg-id="2na2" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/2x2.png",2x2
+http://31.41.12.104:2222/311/index.m3u8
+#EXTINF:0 group-title="Детские" tvg-id="ani" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/ani.png",Ani
+http://31.41.12.104:2222/313/index.m3u8
+#EXTINF:0 group-title="Детские" tvg-id="karusel" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/karusel.png",Карусель
+http://31.41.12.104:2222/304/index.m3u8
+#EXTINF:0 group-title="Музыка" tvg-id="bridge-tv" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/bridge-tv.png",Bridge TV
+http://31.41.12.104:2222/282/index.m3u8
+#EXTINF:0 group-title="Новостные" tvg-id="mir-24" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/mir24.png",Мир 24
+http://31.41.12.104:2222/16/index.m3u8
+#EXTINF:0 group-title="Общие" tvg-id="ntv" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/ntv-white.png",НТВ
+http://31.41.12.104:2222/13/index.m3u8
+#EXTINF:0 group-title="Общие" tvg-id="tnt" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/tnt.png",ТНТ
+http://31.41.12.104:2222/113/index.m3u8
+#EXTINF:0 group-title="Познавательные" tvg-id="moya-planeta" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/moya-planeta.png",Моя Планета
+http://31.41.12.104:2222/101/index.m3u8
+#EXTINF:0 group-title="Спорт" tvg-id="match-tv" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/match-tv.png",Матч!
+http://31.41.12.104:2222/230/index.m3u8
+#EXTINF:0 group-title="Фильмы" tvg-id="kinoxit" tvg-logo="https://raw.githubusercontent.com/bullet2013/picoins/refs/heads/main/kinoxit.png",Кинохит
+http://31.41.12.104:2222/192/index.m3u8

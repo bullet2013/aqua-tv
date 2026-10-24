@@ -1,0 +1,816 @@
+:root {
+  --ink: #103a65;
+  --ink-muted: #5e86a4;
+  --panel: rgba(245, 252, 255, .87);
+  --outline: rgba(255,255,255,.66);
+  --blue: #087ecc;
+  --deep: #093c74;
+  --cyan: #39b6f4;
+  --soft: #d9f3ff;
+  --shadow: 0 18px 50px rgba(16,75,140,.13);
+}
+* {box-sizing:border-box}
+html,body {height:100%; margin:0}
+body {background:#70c8f3; color:var(--ink); font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; overflow:hidden}
+button,input {font:inherit}
+button {cursor:pointer}
+button:focus-visible,input:focus-visible,.channel-row:focus-visible {outline:3px solid #0e91df;outline-offset:2px}
+[hidden] {display:none!important}
+/* One aqua scrollbar style for Firefox and Chromium. */
+* {scrollbar-width:thin;scrollbar-color:#62b7e5 #d8effb}
+::-webkit-scrollbar {width:9px;height:9px}
+::-webkit-scrollbar-track {background:rgba(207,237,252,.75);border-radius:10px}
+::-webkit-scrollbar-thumb {background:#68b9e3;border:2px solid #d8effb;border-radius:10px}
+::-webkit-scrollbar-thumb:hover {background:#279fdb}
+
+/* Full-screen mode fills the browser viewport; the video stays mounted. */
+.fullscreen-stage {position:fixed;inset:0;overflow:hidden;background:#06162b;isolation:isolate;color:#fff}
+.video-shell {position:relative;overflow:hidden;width:100%;height:100%;background:radial-gradient(circle at 48% 45%,#173a56,#030e20 80%)}
+.video-shell video {display:block;width:100%;height:100%;object-fit:contain;background:#000}
+.fullscreen-stage .video-badge {display:none}
+.fullscreen-glow {pointer-events:none;position:absolute;inset:0;box-shadow:inset 0 0 140px rgba(0,40,100,.3);z-index:3}
+.player-placeholder {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:linear-gradient(135deg,#0c3d67,#051529);color:#d5f1ff;z-index:1}
+.placeholder-orbit {width:98px;height:98px;display:grid;place-items:center;border:1px solid rgba(150,229,255,.45);border-radius:50%;background:rgba(54,169,235,.12);box-shadow:0 0 0 15px rgba(40,162,240,.045),0 0 0 30px rgba(40,162,240,.03)}
+.placeholder-orbit span {color:#91e5ff;font-size:37px;margin-left:6px}
+.player-placeholder strong {font-size:26px;letter-spacing:.015em;margin-top:20px}
+.player-placeholder>span {font-size:14px;color:#9cc9e4;text-align:center;max-width:70%;line-height:1.5}
+.video-badge {position:absolute;top:23px;left:24px;z-index:2;background:rgba(6,27,45,.65);border:1px solid rgba(255,255,255,.17);color:#f1faff;padding:8px 11px;border-radius:9px;font-size:10px;letter-spacing:.14em;font-weight:800;display:flex;align-items:center;gap:8px;backdrop-filter:blur(8px)}
+.live-dot {display:inline-block;width:7px;height:7px;border-radius:50%;background:#52ebd5;box-shadow:0 0 0 4px rgba(82,235,213,.14);flex:none}
+.center-play {position:absolute;left:50%;top:50%;z-index:6;transform:translate(-50%,-50%);height:75px;width:75px;border-radius:50%;background:rgba(19,156,232,.87);color:white;border:2px solid rgba(255,255,255,.6);font-size:30px;box-shadow:0 10px 45px #002c5b}
+.immersive-top {position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:17px;padding:27px 39px 65px;background:linear-gradient(180deg,rgba(0,11,31,.86),transparent);z-index:4;pointer-events:none}
+.brand-mark,.brand-square,.startup-symbol {font-weight:900;letter-spacing:-.11em}
+.brand-mark {height:50px;width:50px;flex:none;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#2ebaff,#0875c7);font-size:30px;box-shadow:0 8px 25px rgba(0,130,210,.3)}
+.brand-mark span,.brand-square span,.startup-symbol span {font-size:.42em;vertical-align:top;margin-left:.12em;letter-spacing:0}
+.top-copy {display:flex;flex-direction:column;gap:5px;min-width:0}
+.top-copy b {font-size:19px;text-shadow:0 2px 15px #000}
+.top-copy span {font-size:12px;color:#c2e3f6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:53vw}
+.top-right {display:flex;gap:9px;align-items:center;margin-left:auto;font-size:12px;color:#dbedff}
+.clock-full {font-size:20px;font-weight:700;letter-spacing:.02em}
+.top-separator {height:20px;width:1px;background:#80a5c4;margin:0 13px}
+.hint-key,.player-actions kbd {font:700 11px inherit;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:5px 7px}
+.immersive-bottom {position:absolute;left:0;right:0;bottom:0;display:flex;align-items:end;justify-content:space-between;gap:24px;padding:100px 40px 39px;background:linear-gradient(0deg,rgba(0,10,26,.95),rgba(0,10,26,.57) 52%,transparent);z-index:4;transition:opacity .4s}
+.onair-details {width:min(620px,62vw)}
+.onair-eyebrow {font-size:11px;letter-spacing:.16em;color:#5bdbff;font-weight:800}
+.onair-details h2 {font-size:clamp(18px,2vw,29px);line-height:1.25;margin:11px 0 21px}
+.progress-line {height:5px;border-radius:9px;background:rgba(255,255,255,.25);overflow:hidden}
+.progress-fill,.now-progress>div {height:100%;background:linear-gradient(90deg,#5ddbf7,#0c85de);border-radius:9px;transition:width .6s}
+.onair-meta {display:flex;justify-content:space-between;gap:10px;margin-top:11px;color:#b4cee0;font-size:12px}
+.player-actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.action-primary {height:49px;display:flex;align-items:center;gap:13px;background:#159ce9;color:#fff;font-size:13px;font-weight:800;border:1px solid #66cefb;border-radius:12px;padding:0 18px;box-shadow:0 10px 32px rgba(3,111,193,.35)}
+.action-primary>span {font-size:20px}.action-primary kbd {padding:3px 5px;font-size:10px}
+.icon-button {width:49px;height:49px;display:grid;place-items:center;border-radius:12px;border:1px solid rgba(255,255,255,.23);background:rgba(255,255,255,.12);color:#fff;font-size:24px;backdrop-filter:blur(8px)}
+.icon-button:hover,.action-primary:hover {filter:brightness(1.1)}
+
+/* Guide mode: a light, unmistakably blue TV dashboard. */
+.guide-view {position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;background:radial-gradient(ellipse at 8% -18%,#ecfbff 2%,transparent 43%),radial-gradient(ellipse at 100% 112%,#6cbef3 6%,transparent 50%),linear-gradient(135deg,#a8e4ff 0%,#7dcef8 45%,#c0eeff 100%)}
+.guide-view:before {content:"";position:absolute;width:360px;height:360px;left:-160px;bottom:-130px;border-radius:50%;border:65px solid rgba(255,255,255,.11);pointer-events:none}
+/* The guide starts at the top edge, with no site-wide masthead. */
+.guide-layout {position:relative;z-index:1;display:grid;grid-template-columns:200px minmax(290px,1fr) minmax(325px,37%);gap:14px;flex:1;min-height:0;padding:12px 20px 14px}
+.categories-panel {display:flex;flex-direction:column;min-height:0;padding:4px 7px 4px 0}
+.sidebar-topbar {display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:44px;margin:0 0 14px 5px}
+.guide-clock {font-weight:850;font-size:28px;letter-spacing:-.055em;font-variant-numeric:tabular-nums}
+.close-guide {display:flex;align-items:center;gap:5px;color:#14659f;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.8);border-radius:9px;padding:8px 9px;font-size:12px;font-weight:750;white-space:nowrap}
+.close-guide kbd {font-size:10px;background:rgba(33,117,179,.1);padding:4px 5px;border-radius:5px}
+.categories-title {font-size:21px;font-weight:850;margin:0 0 15px 8px;letter-spacing:-.04em}
+.section-kicker {color:#3e97c7;letter-spacing:.15em;font-weight:900;font-size:10px}
+.signal-dot {display:inline-block;width:7px;height:7px;background:#04bfaa;border-radius:50%;box-shadow:0 0 0 4px rgba(4,191,170,.11);margin-right:4px}
+.epg-status {font-size:10px;color:#225d89;background:rgba(255,255,255,.7);border:1px solid #d1eaf6;padding:7px 8px;border-radius:8px;white-space:nowrap;max-width:145px;overflow:hidden;text-overflow:ellipsis}
+.epg-status.error {color:#a8423e}
+.category-list {overflow-y:auto;min-height:0;padding-right:5px}
+.category-button {display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid transparent;border-radius:12px;background:transparent;color:#335f81;font-weight:680;font-size:13px;padding:13px 11px;margin-bottom:4px;transition:background .13s}
+.category-button:hover {background:rgba(255,255,255,.32)}
+.category-button.active {background:#fff;box-shadow:0 9px 20px rgba(42,115,185,.13);color:#087fc2}
+.cat-icon {display:grid;place-items:center;flex:none;width:25px;height:25px;font-size:17px}
+.cat-count {margin-left:auto;font-size:10px;font-weight:750;color:#7d9db3;background:rgba(255,255,255,.48);border-radius:7px;padding:4px 6px}
+.category-button.active .cat-count {background:#e7f7ff;color:#1287c9}
+.sidebar-footer {margin-top:auto;display:flex;flex-direction:column;gap:7px;padding:19px 14px;background:rgba(245,252,255,.32);border:1px solid rgba(255,255,255,.5);border-radius:14px}
+.sidebar-info-icon {height:26px;width:26px;border-radius:8px;display:grid;place-items:center;color:#087fc2;background:rgba(255,255,255,.7)}
+.sidebar-footer b {font-size:11px;margin-top:3px}.sidebar-footer>span {font-size:11px;line-height:1.5;color:#5785a6}
+.keyboard-small {margin-top:8px;color:#62849b;font-size:10px;line-height:2}
+.keyboard-small kbd {background:#fff;border-radius:4px;margin-right:3px;padding:4px;font-size:10px}
+.channels-panel,.right-panel {min-height:0;background:var(--panel);border:1px solid var(--outline);border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(18px)}
+.channels-panel {display:flex;flex-direction:column;overflow:hidden}
+.channels-header {padding:15px 18px 9px;flex:none}
+.channels-header h1 {font-size:clamp(19px,1.75vw,25px);line-height:1.1;letter-spacing:-.05em;margin:0;display:flex;align-items:center;gap:12px}
+.count-pill {font-size:12px;font-weight:800;letter-spacing:0;padding:5px 10px;border-radius:8px;background:#d4effe;color:#1388cc}
+.channels-header p {margin:0 0 18px;color:#7596b1;font-size:12px}
+.search-box {height:44px;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #d9edf9;border-radius:11px;padding:0 13px;box-shadow:0 3px 9px rgba(31,117,161,.035)}
+.search-icon {font-size:26px;font-weight:300;color:#58a2ca;line-height:1}
+.search-box input {width:100%;border:0;background:transparent;outline:0;color:var(--ink);font-size:12px;min-width:0}
+.search-box input::placeholder {color:#93acc1}
+.search-box kbd {border:1px solid #e5f0f7;color:#a1b4c4;padding:2px 6px;border-radius:5px;font-size:12px}
+.channels-list-title {display:grid;grid-template-columns:44% 1fr;gap:10px;padding:7px 18px 9px;border-bottom:1px solid #e5f0f7;font-size:9px;letter-spacing:.12em;color:#92aec3;font-weight:800}
+.channel-list {flex:1;overflow-y:auto;min-height:0;padding:2px 8px 10px;outline:0}
+.channel-row {width:100%;display:grid;grid-template-columns:minmax(0,44%) minmax(0,1fr);gap:7px;align-items:center;padding:7px 9px;min-height:66px;border:1px solid transparent;border-bottom-color:#e8f3f9;border-radius:11px;color:#1d4b73;background:transparent;text-align:left;cursor:pointer;transition:background .13s,box-shadow .13s}
+.channel-row:last-child {border-bottom-color:transparent}
+.channel-row:hover {background:#eef9ff}
+.channel-row.active {background:#d9f3ff;border:1px solid #a0daf6;box-shadow:inset 3px 0 #129ee6}
+.row-channel-info {display:flex;align-items:center;gap:8px;min-width:0}
+.row-logo {position:relative;height:37px;width:40px;flex:none;border-radius:8px;background:#fff;display:grid;place-items:center;overflow:hidden;box-shadow:0 2px 6px rgba(9,76,112,.04);border:1px solid #e5f0f6}
+.row-logo img {height:85%;width:85%;object-fit:contain;position:relative;z-index:1;background:transparent}.row-logo-fallback {font-weight:800;font-size:13px;color:#5bb0d7}
+.row-text {display:flex;flex-direction:column;gap:3px;min-width:0}
+.row-name {font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#174970}
+.row-subtitle {font-size:10px;color:#8ca9bf;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-right {min-width:0;display:flex;flex-direction:column;gap:4px}
+.row-program {font-size:11px;font-weight:650;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#466e8e}
+.row-time {display:flex;align-items:center;gap:7px;min-width:0;color:#8aa5b9;font-size:9px;font-variant-numeric:tabular-nums}
+.row-bar {height:3px;border-radius:3px;background:#d9e9f3;overflow:hidden;flex:1}
+.row-bar div {height:100%;background:#20abe9;border-radius:3px}
+/* Next show is always underneath the live-progress line. */
+.row-next {display:flex;align-items:center;gap:5px;min-width:0;color:#7599b4;font-size:10px;line-height:1.25}
+.row-next-label {flex:none;color:#218fc7;font-weight:750}
+.row-next-label:after {content:":"}
+.row-next-title {min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.row-next-start {flex:none;font-size:9px;color:#8bacc0;font-variant-numeric:tabular-nums}
+.row-star {color:#f6b02c;font-size:12px}
+.empty-list {margin:28px 13px;padding:35px 15px;background:#eef8fe;border:1px dashed #afcfe2;border-radius:13px;text-align:center;color:#678faf;font-size:13px;line-height:1.7}
+
+.right-panel {padding:13px;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.preview-topline {display:flex;justify-content:space-between;align-items:center;gap:8px;margin:1px 3px 8px;color:#5687ab;font-weight:900;font-size:10px;letter-spacing:.08em}
+.preview-topline>span {display:flex;align-items:center;gap:6px}
+.preview-buttons {display:flex;align-items:center;gap:13px;flex-wrap:wrap;justify-content:flex-end}
+.preview-topline button {border:0;background:transparent;color:#167fbd;font-weight:800;font-size:11px;letter-spacing:0;padding:4px 0}
+.preview-topline button span {font-size:15px}
+.preview-slot {width:100%;aspect-ratio:16/9;flex:none;background:#0c305a;border:4px solid #fff;border-radius:13px;overflow:hidden;box-shadow:0 10px 26px rgba(8,69,113,.14)}
+.preview-slot .video-badge {top:12px;left:12px;transform:scale(.77);transform-origin:top left}
+.preview-slot .placeholder-orbit {width:45px;height:45px;box-shadow:0 0 0 8px rgba(40,162,240,.05)}
+.preview-slot .placeholder-orbit span {font-size:19px;margin-left:3px}
+.preview-slot .player-placeholder {gap:5px}.preview-slot .player-placeholder strong {font-size:13px;margin-top:5px}.preview-slot .player-placeholder>span {font-size:10px}
+.preview-slot .center-play {width:48px;height:48px;font-size:19px}
+.preview-meta {padding:17px 2px 13px;border-bottom:1px solid #e0edf6}
+.selected-title-row {display:flex;gap:11px;align-items:center}
+.selected-logo {width:42px;height:42px;border:1px solid #e3edf6;flex:none;border-radius:10px;background:#fff;display:grid;place-items:center;color:#3d9fd1;font-weight:900;font-size:11px;overflow:hidden}
+.selected-logo img {max-width:88%;max-height:88%;object-fit:contain}
+.selected-label {min-width:0}.selected-label>span {font-size:10px;color:#93a9ba}
+.selected-label h2 {margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:18px;letter-spacing:-.04em}
+.favorite-button {margin-left:auto;flex:none;border:1px solid #dbeef8;border-radius:10px;background:#fff;width:38px;height:38px;color:#79a3bf;font-size:26px;line-height:1}
+.favorite-button.active {color:#f2ac27}
+.playing-now-box {margin-top:15px;background:#e7f6fe;border:1px solid #d3ebfb;border-radius:11px;padding:13px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.now-label {font-size:9px;letter-spacing:.08em;color:#1185bb;font-weight:900}
+.playing-now-box>b {font-size:13px;line-height:1.4}
+.current-program-meta {display:flex;justify-content:space-between;gap:10px;color:#759eb8;font-size:10px}
+.now-progress {height:4px;border-radius:4px;background:#c7e4f6;overflow:hidden}
+.schedule-header {display:flex;align-items:center;justify-content:space-between;margin:19px 3px 10px}
+.schedule-header h3 {font-size:18px;letter-spacing:-.04em;margin:5px 0 0}
+.refresh-guide {height:34px;width:34px;border:1px solid #d9edf7;border-radius:9px;background:#fff;color:#258ec9;font-size:20px}
+.refresh-guide:hover {background:#e2f7ff}
+.program-list {display:flex;flex-direction:column;gap:6px;min-height:80px;padding:0 2px 12px}
+.schedule-row {display:grid;grid-template-columns:54px 1fr;gap:12px;padding:12px 9px;border-radius:10px;color:#5b7d98}
+.schedule-row.current {background:#d8f2ff;border:1px solid #b9e3f8;color:#114f80}
+.schedule-time {font-size:11px;font-weight:850;white-space:nowrap;color:#4795c0}
+.schedule-copy {min-width:0;display:flex;flex-direction:column;gap:4px}.schedule-copy b {font-size:11px;font-weight:720;line-height:1.4}.schedule-copy small {font-size:10px;color:#7899b1;line-height:1.3}
+.no-guide {background:#f0f9fe;border-radius:10px;padding:22px 14px;text-align:center;color:#7899b1;font-size:12px;line-height:1.7}
+.guide-footer {position:relative;z-index:1;display:flex;justify-content:space-between;flex:none;gap:20px;padding:2px 34px 12px;color:#5385a9;font-size:10px}
+.guide-footer i {font-style:normal;margin:0 8px;color:#8db8d3}
+.startup {position:fixed;inset:0;z-index:100;background:linear-gradient(145deg,#b4eaff,#4daee6);display:grid;place-items:center;padding:20px}
+.startup-card {width:min(420px,100%);display:flex;flex-direction:column;align-items:center;text-align:center;padding:39px 25px 30px;border-radius:24px;background:rgba(255,255,255,.83);box-shadow:0 25px 90px rgba(15,103,164,.26)}
+.startup-symbol {width:69px;height:69px;display:grid;place-items:center;background:#0795df;color:#fff;border-radius:21px;font-size:40px;box-shadow:0 10px 22px #a4d5ed}
+.startup-card h2 {font-size:22px;letter-spacing:-.04em;margin:24px 0 9px}.startup-card p {font-size:13px;color:#6589a5;line-height:1.6;max-width:350px;margin:0}
+.startup-spinner {margin:27px auto 4px;width:28px;height:28px;border-radius:50%;border:3px solid #cceaf9;border-top-color:#118fd4;animation:spin 1s linear infinite}
+.retry-button {margin-top:20px;background:#0b95dc;border:0;border-radius:10px;color:white;font-weight:800;padding:12px 18px}
+@keyframes spin {to {transform:rotate(360deg)}}
+.toast {position:fixed;bottom:20px;left:50%;transform:translate(-50%,10px);z-index:150;max-width:min(540px,calc(100vw - 30px));padding:13px 19px;background:#093d67;color:#fff;font-size:12px;line-height:1.5;border-radius:12px;box-shadow:0 14px 45px rgba(4,58,106,.3);opacity:0;pointer-events:none;transition:transform .25s,opacity .25s;text-align:center}
+.toast.visible {opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1200px) {
+  .guide-layout {grid-template-columns:166px minmax(250px,1fr) minmax(300px,36%);gap:10px;padding:10px 12px}
+  .categories-title {font-size:19px}.category-button {font-size:12px;padding:10px 7px;gap:6px}
+  .sidebar-topbar {margin-left:2px}.guide-clock {font-size:25px}
+  .channels-header {padding:13px 13px 8px}.channels-list-title {padding:8px 12px}
+  .channel-row {padding:6px 5px;gap:5px}.row-logo {width:35px;height:34px}.row-channel-info {gap:6px}.row-name {font-size:11px}
+  .right-panel {padding:11px}.epg-status {max-width:92px}
+}
+@media (max-width:850px) {
+  body {overflow:auto}.guide-view {overflow:auto}
+  .guide-layout {display:grid;grid-template-columns:140px minmax(250px,1fr);overflow:visible;flex:none;min-height:100vh}
+  .categories-panel {grid-column:1;grid-row:1 / span 2}.channels-panel {grid-column:2;min-height:65vh}.right-panel {grid-column:2;min-height:500px}
+  .right-panel .preview-slot {max-width:100%}.category-button {font-size:11px}
+  .close-guide span {display:none}.epg-status {max-width:180px}
+  .immersive-top {padding:18px}.immersive-bottom {padding:70px 18px 20px;align-items:start;flex-direction:column}
+  .onair-details {width:100%}.player-actions {width:100%;justify-content:flex-start}.top-right .hint-label {display:none}
+}
+@media (max-width:520px) {
+  .guide-layout {grid-template-columns:minmax(0,1fr);padding:8px;gap:9px}
+  .categories-panel {grid-column:1;grid-row:auto;padding:0}
+  .sidebar-topbar {margin:0 4px 8px}.guide-clock {font-size:24px}.categories-title {font-size:17px;margin:0 4px 6px}
+  .category-list {display:flex;gap:4px;overflow:auto;padding:3px}.category-button {white-space:nowrap;width:auto;margin:0;flex:none;padding:8px 9px}
+  .channels-panel {grid-column:1;min-width:0;min-height:65vh}.right-panel {grid-column:1;min-width:0;min-height:620px}
+  .channel-row {grid-template-columns:minmax(0,1fr);min-width:0;gap:6px;padding:9px 10px}
+  .channel-row .row-right {margin-left:41px}
+  .channels-list-title {grid-template-columns:1fr}.channels-list-title span:last-child {display:none}
+  .top-copy b {font-size:15px}.top-copy span {max-width:38vw}.brand-mark {width:42px;height:42px}
+  .hint-key,.top-separator {display:none}.onair-details h2 {font-size:19px}.action-primary {height:43px}.icon-button {height:43px;width:43px}
+}
+
+/* IPTV diagnostics drawer — deliberately compact so the TV interface stays intact. */
+.diagnostics-panel {position:fixed;z-index:110;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(540px,calc(100vw - 26px));max-height:min(85vh,780px);overflow-y:auto;
+  background:linear-gradient(155deg,#f3fbff,#d8f2ff);border:1px solid #fff;border-radius:19px;
+  box-shadow:0 25px 95px rgba(4,35,78,.45);color:#164b76}
+.diagnostics-heading {display:flex;align-items:center;justify-content:space-between;gap:15px;
+  padding:20px 23px 15px;border-bottom:1px solid #c7e8f8}
+.diagnostics-heading span {font-size:10px;letter-spacing:.14em;font-weight:850;color:#3198c8}
+.diagnostics-heading h2 {font-size:21px;margin:5px 0 0;letter-spacing:-.04em}
+.diagnostics-close {border:1px solid #b5dfee;border-radius:10px;background:white;color:#317fa9;
+  width:35px;height:35px;flex:none}
+.diagnostics-body {padding:17px 23px 22px}
+.diagnostics-row {display:grid;grid-template-columns:125px minmax(0,1fr);gap:12px;padding:10px 0;
+  border-bottom:1px solid #d2eaf6;font-size:12px;line-height:1.5}
+.diagnostics-row b {font-size:11px;color:#769cb3}.diagnostics-row span {overflow-wrap:anywhere}
+.diagnostics-tip {margin:15px 0;background:#edfaff;border-left:3px solid #1b99df;border-radius:8px;
+  padding:13px 14px;font-size:12px;line-height:1.65}
+.diagnostics-details {margin:12px 0;font-size:12px}
+.diagnostics-details summary {color:#127eb5;font-weight:800;cursor:pointer;padding:6px 0}
+.diagnostics-details>b {font-size:11px;color:#769cb3}
+.diagnostics-url {padding:9px 11px;margin:6px 0 13px;border-radius:7px;background:#fff;overflow-wrap:anywhere;
+  user-select:text;max-height:100px;overflow-y:auto;font-size:11px;line-height:1.65}
+.diagnostics-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.diagnostics-actions button {padding:10px 12px;border:1px solid #c4e3f5;background:#fff;border-radius:9px;
+  color:#1972a2;font-size:11px;font-weight:800}
+.diagnostics-actions .diagnostics-primary {background:#148fd3;color:white;border-color:#148fd3}
+.diagnostics-footnote {font-size:10px;color:#7499b0;line-height:1.6;margin:14px 0 0}
+@media(max-width:520px){.diagnostics-body{padding:13px 16px 18px}.diagnostics-heading{padding:15px 16px 12px}
+.diagnostics-row{grid-template-columns:105px minmax(0,1fr);gap:8px}.preview-buttons{gap:6px}}
+
+/* v1.2 XMLTV diagnostic controls — same cyan visual language. */
+.epg-status {font-family:inherit;cursor:pointer;transition:filter .15s}
+.epg-status:hover {filter:brightness(.97);background:white}
+.epg-toolbar {display:flex;align-items:center;gap:6px}
+.epg-info-button {height:34px;border:1px solid #d9edf7;border-radius:9px;background:#fff;color:#258ec9;font-weight:900;font-size:11px;padding:0 9px}
+.epg-info-button:hover {background:#e2f7ff}
+.epg-panel {width:min(610px,calc(100vw - 26px))}
+.epg-panel .diagnostics-row {grid-template-columns:147px minmax(0,1fr)}
+.epg-help {font-size:11px;line-height:1.65;color:#5b87a4;background:#eaf8ff;border-radius:9px;padding:13px 14px}
+.epg-problem {color:#a74336;border-left-color:#d2785a}
+@media(max-width:850px) {.epg-status {display:none}}
+@media(max-width:520px) {.epg-panel .diagnostics-row {grid-template-columns:115px minmax(0,1fr)}}
+
+
+/* v1.5 — cleaner preview, compact upcoming programme, live EPG progress. */
+.preview-topline {justify-content:flex-end;margin:0 3px 7px;min-height:19px}
+.preview-meta {padding-bottom:10px;border-bottom:0}
+.playing-now-box {margin-top:11px;padding:11px 13px 10px;gap:6px}
+.now-progress {margin-top:2px}
+.up-next-label {font-size:10px;font-weight:850;letter-spacing:.11em;color:#368eb8;
+  padding:10px 9px 5px;border-top:1px solid #daeaf5;margin-top:3px}
+.program-list {gap:0;padding:0 2px 10px;min-height:50px}
+.schedule-day {font-size:9px;letter-spacing:.055em;color:#4799c6;font-weight:800;
+  padding:8px 8px 4px}
+.schedule-row {grid-template-columns:47px minmax(0,1fr);gap:10px;
+  padding:8px 10px;min-height:31px;border-radius:7px;align-items:center;
+  border-bottom:1px solid rgba(190,219,234,.43)}
+.schedule-row.next {background:rgba(215,243,255,.64);color:#194f78}
+.schedule-row:last-child {border-bottom:0}
+.schedule-time {font-size:10px}
+.schedule-copy {gap:0}
+.schedule-copy b {font-size:11px;font-weight:700;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Keep bar width changes smooth while the JS timer continues in the background. */
+.row-bar .epg-progress {transition:width .85s linear}
+
+
+/* v1.6 — shorter channel rows, keyboard focus independent of live channel. */
+.channel-row {min-height:49px;padding:4px 8px;gap:9px;grid-template-columns:minmax(0,41%) minmax(0,1fr);border-radius:9px}
+.channel-row.focused {outline:2px solid #008fdb;outline-offset:-2px;background:#e3f7ff}
+.channel-row.active.focused {background:#d2f1ff;box-shadow:inset 3px 0 #129ee6}
+.row-logo {width:34px;height:33px;border-radius:7px}
+.row-text {gap:2px}.row-name {font-size:11px}.row-subtitle {font-size:9px}
+.row-right {gap:5px}
+.row-current-line {display:flex;align-items:center;gap:8px;min-width:0}
+.row-program {flex:1;line-height:1.15;font-size:10.5px}
+.row-bar {flex:0 0 64px;width:64px;max-width:24%;height:4px;background:#c7dfed}
+.row-next {gap:4px;font-size:9.5px;line-height:1.15;min-height:12px}
+.row-next-label {font-size:14px;line-height:8px;color:#38a5d2}
+.row-next-label:after {content:none}
+.row-next-start {font-size:9px}
+.channels-list-title {grid-template-columns:41% 1fr}
+.sidebar-tools {flex:none;margin-top:auto;padding:12px 5px 2px;border-top:1px solid rgba(255,255,255,.55)}
+.sidebar-tools button {background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.92);border-radius:10px;color:#137caf;padding:11px 12px;font-size:12px;font-weight:800;width:100%;text-align:left}
+.sidebar-tools button:hover {background:white}
+.category-list {flex:1;overflow-y:auto}
+/* Only upcoming shows scroll; the video and NOW stay perfectly fixed. */
+.right-panel {overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.preview-slot {cursor:zoom-in;flex:0 0 auto}
+.preview-slot:focus-visible {outline:3px solid #058cda;outline-offset:3px}
+.preview-meta {flex:0 0 auto;padding:0 1px 9px}
+.playing-now-box {margin-top:10px;padding:10px 12px 11px}
+.now-heading {display:flex;align-items:center;justify-content:space-between;min-height:20px}
+.now-heading .favorite-button {width:25px;height:23px;border:0;border-radius:6px;background:transparent;font-size:23px;color:#8dacc4}
+.now-heading .favorite-button.active {color:#e7a224}
+.up-next-label {flex:0 0 auto;margin-top:0;padding:9px 9px 7px}
+.program-list {flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;gap:0;padding:0 3px 9px}
+.schedule-row {padding:7px 9px;min-height:29px}
+.schedule-day {padding:8px 8px 4px}
+.no-guide {padding:14px 10px}
+@media (max-width:1200px) {
+  .channel-row {padding:5px 5px;gap:5px;grid-template-columns:minmax(0,41%) minmax(0,1fr)}
+  .row-logo {width:32px;height:32px}
+  .row-bar {flex-basis:50px;width:50px}
+}
+@media (max-width:850px) {
+  .right-panel {height:620px;min-height:0}
+  .categories-panel {position:relative}
+  .sidebar-tools {margin-top:12px}
+}
+@media (max-width:520px) {
+  .channel-row {grid-template-columns:minmax(0,40%) minmax(0,1fr);min-height:52px;padding:5px 7px;gap:6px}
+  .channel-row .row-right {margin-left:0}
+  .channels-list-title {grid-template-columns:40% 1fr}
+  .channels-list-title span:last-child {display:block}
+  .row-logo {width:29px;height:29px}
+  .row-channel-info {gap:5px}
+  .row-name {font-size:10px}
+  .row-subtitle {font-size:8px}
+  .row-program,.row-next {font-size:9px}
+  .row-next-start {font-size:8px}
+  .row-bar {flex-basis:36px;width:36px}
+  .sidebar-tools {margin:6px 0 0;padding:6px 3px 0}
+  .sidebar-tools button {padding:8px 10px}
+  .right-panel {height:590px;min-height:0}
+}
+
+
+/* v1.7 — headings and counts removed; category and channel sheet make one tab. */
+@media (min-width: 521px) {
+  .guide-layout {column-gap:0}
+  .categories-panel {position:relative;z-index:2;padding-right:0}
+  .category-list {padding-right:0}
+  .category-button {width:calc(100% - 8px)}
+  .category-button.active {position:relative;width:100%;border-radius:12px 0 0 12px;
+    border-color:transparent;background:#f5fcff;box-shadow:-6px 4px 14px rgba(34,105,159,.09)}
+  .categories-panel::after {content:"";position:absolute;z-index:3;pointer-events:none;
+    top:var(--tab-top,-100px);height:var(--tab-height,0px);
+    right:-2px;width:13px;background:#f5fcff;border-radius:0}
+  .channels-panel {position:relative;z-index:1;background:#f5fcff;border-left-color:transparent;
+    border-top-left-radius:15px;border-bottom-left-radius:15px}
+  .right-panel {margin-left:14px}
+}
+.channel-list {padding-top:9px}
+.row-text {justify-content:center}
+.row-channel-info {min-height:32px}
+.row-next {gap:0}
+.row-next-title {margin-left:0}
+@media (max-width:1200px) and (min-width:521px) {
+  .right-panel {margin-left:10px}
+}
+@media (max-width:520px) {
+  .guide-layout {column-gap:9px}
+  .category-list {padding-right:3px}
+  .category-button {width:auto}
+  .category-button.active {border-radius:10px;background:#fff}
+  .channels-panel {background:var(--panel)}
+  .right-panel {margin-left:0}
+  .channel-list {padding-top:7px}
+}
+
+
+/* v1.8 — three-column remote navigation and linked programme details. */
+.category-button.keyboard-focused {outline:2px solid #0794d7;outline-offset:-3px;background:#e5f7ff}
+.category-button.active.keyboard-focused {background:#f5fcff}
+.channel-row:focus-visible {outline:2px solid #0794d7;outline-offset:-2px}
+.programme-focus-item {cursor:pointer;transition:background .13s, box-shadow .13s}
+.playing-now-box.programme-focus-item.keyboard-focused {background:#d6f1ff;box-shadow:inset 0 0 0 2px #159fe7}
+.schedule-row.programme-focus-item.keyboard-focused {background:#c9edff;box-shadow:inset 0 0 0 2px #159fe7}
+.programme-focus-item:focus-visible {outline:2px solid #048ad3;outline-offset:0}
+.channels-panel.popup-visible {z-index:8;overflow:visible}
+.program-popup {position:absolute;left:12px;right:-3px;top:50px;z-index:15;max-height:min(340px,calc(100% - 18px));
+  padding:17px 20px 15px;border:1px solid #9ed9f7;border-radius:15px 0 0 15px;
+  background:#f5fcff;box-shadow:0 20px 55px rgba(4,72,132,.24);overflow-wrap:anywhere;overflow-y:auto}
+/* White connector reaches the highlighted show without covering the video. */
+@media (min-width:851px) {
+  .channels-panel.popup-visible::after {content:"";position:absolute;z-index:16;pointer-events:none;
+    right:-21px;top:var(--bridge-top,180px);width:25px;height:21px;
+    background:#f5fcff;border:1px solid #9ed9f7;border-left:0;border-radius:0 9px 9px 0}
+}
+.popup-tag {color:#1395c9;font-size:9px;font-weight:900;letter-spacing:.12em}
+.program-popup h2 {font-size:17px;line-height:1.3;color:#12476d;margin:9px 0 7px}
+.popup-time {font-size:10px;font-weight:750;color:#6396b3}
+.popup-description {font-size:12px;color:#315e7b;line-height:1.65;white-space:pre-line;margin:14px 0 14px;max-height:165px;overflow-y:auto}
+.popup-help {font-size:10px;color:#6b99b4;font-weight:700}
+@media (min-width:851px) {
+  .program-popup {right:-15px;border-radius:13px 0 0 13px;border-right:0}
+  .program-popup::before {content:"";position:absolute;pointer-events:none;right:-10px;
+    top:calc(var(--pointer-top,48px) - 9px);width:0;height:0;
+    border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:10px solid #f5fcff}
+}
+@media (max-width:850px) {
+  .program-popup {right:8px;max-height:70%;border-radius:13px}
+}
+
+
+/* v1.9 — descriptions never exceed the channels panel; joined selection. */
+.channel-list {overflow-x:hidden}
+@media (min-width:521px) {
+  /* All four sides of the selected category remain visible and rounded. */
+  .guide-layout {column-gap:7px}
+  .categories-panel::after {display:none}
+  .category-button.active {
+    width:calc(100% - 8px);
+    border:1px solid #83cceb;
+    border-radius:12px;
+    background:#f5fcff;
+    box-shadow:0 5px 14px rgba(27,106,165,.1);
+  }
+  .category-button.keyboard-focused,
+  .category-button.active.keyboard-focused {
+    border:1px solid #159fe7;
+    border-radius:12px;
+    outline:0;
+    background:#e4f6ff;
+    box-shadow:inset 0 0 0 1px #159fe7, 0 4px 14px rgba(35,110,157,.11);
+  }
+  .channels-panel {border-left-color:var(--outline)}
+}
+@media (max-width:520px) {
+  .category-button.active {border:1px solid #83cceb;border-radius:11px}
+  .category-button.keyboard-focused {border:1px solid #159fe7;border-radius:11px;outline:0;box-shadow:inset 0 0 0 1px #159fe7}
+}
+/* Keep the description inside the centre column, regardless of EPG text. */
+.channels-panel.popup-visible {overflow:visible}
+.program-popup {
+  left:12px;
+  right:12px;
+  width:auto;
+  max-width:calc(100% - 24px);
+  min-width:0;
+  border:2px solid #159fe7;
+  border-radius:13px;
+  background:#f5fcff;
+  box-sizing:border-box;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  box-shadow:0 18px 48px rgba(4,89,148,.23);
+}
+.program-popup::before {display:none!important}
+.popup-description,.program-popup h2,.popup-time {
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.popup-description {overflow-x:hidden}
+/* Connected tab between the description and the focused programme. */
+.program-connector {
+  position:absolute;
+  z-index:12;
+  pointer-events:none;
+  background:#159fe7;
+  height:12px;
+  border-top:2px solid #087cba;
+  border-bottom:2px solid #087cba;
+  box-sizing:border-box;
+}
+/* Remove v1.8 connector; dynamic bridge is used instead. */
+.channels-panel.popup-visible::after {display:none}
+.playing-now-box.programme-focus-item.popup-linked,
+.schedule-row.programme-focus-item.popup-linked {
+  background:#159fe7;
+  border:2px solid #087cba;
+  color:#fff;
+  box-shadow:0 6px 20px rgba(16,130,209,.21);
+}
+.playing-now-box.programme-focus-item.popup-linked *,
+.schedule-row.programme-focus-item.popup-linked * {color:#fff}
+.playing-now-box.programme-focus-item.popup-linked .now-progress {background:rgba(255,255,255,.28)}
+.playing-now-box.programme-focus-item.popup-linked .now-progress>div {background:#f0fdff}
+.playing-now-box.programme-focus-item.popup-linked .signal-dot {background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.playing-now-box.programme-focus-item.popup-linked .favorite-button {color:#fff}
+@media(max-width:850px) {
+  .program-popup {right:12px;left:12px;max-height:70%;border:2px solid #159fe7;border-radius:13px}
+  .program-connector {display:none!important}
+}
+
+
+
+/* AQUA TV v2.0 — categories slide OVER the channel list, never consume a column. */
+:root {--font-scale:1}
+.guide-layout {
+  display:grid;
+  grid-template-columns:minmax(330px,1fr) minmax(325px,37%);
+  gap:14px;
+  position:relative;
+  isolation:isolate;
+  padding:12px 20px 14px;
+  overflow:hidden;
+}
+.channels-panel {grid-column:1;grid-row:1;z-index:1;min-width:0;border-radius:18px;border-left:1px solid var(--outline)}
+.right-panel {grid-column:2;grid-row:1;margin:0;z-index:1;min-width:0}
+.categories-panel {
+  position:absolute!important;
+  z-index:31;
+  left:20px;
+  top:12px;
+  bottom:14px;
+  width:clamp(230px,28vw,310px);
+  min-height:0;
+  padding:15px 10px 11px 14px;
+  border:1px solid rgba(255,255,255,.94);
+  border-radius:17px 12px 12px 17px;
+  background:linear-gradient(140deg,#f6fcff 0%,#dcf3ff 90%);
+  box-shadow:18px 10px 45px rgba(16,73,118,.22);
+  transform:translateX(calc(-100% - 28px));
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:transform .3s cubic-bezier(.18,.79,.24,1),opacity .26s,visibility .3s;
+}
+.guide-layout.menu-open .categories-panel {
+  transform:translateX(0);
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.categories-panel::after {display:none!important}
+.menu-backdrop {
+  position:absolute;
+  inset:12px auto 14px 20px;
+  width:calc(63% - 30px);
+  background:rgba(24,117,177,.12);
+  border:0;
+  border-radius:18px;
+  z-index:25;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .2s,visibility .2s;
+}
+.guide-layout.menu-open .menu-backdrop {opacity:1;visibility:visible;pointer-events:auto}
+.sidebar-topbar {margin:0 0 13px 6px;min-height:42px}
+.category-list {display:block;flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:0 4px 0 0}
+.category-button,
+.category-button.active,
+.category-button.keyboard-focused,
+.category-button.active.keyboard-focused {
+  width:100%;border-radius:11px;margin-bottom:3px;transition:background .15s;
+  font-size:calc(13px * var(--font-scale));
+  padding:12px 10px;
+}
+.category-button.active {background:#fff;border:1px solid #9bd7f2;box-shadow:0 5px 14px rgba(20,106,159,.1)}
+.category-button.keyboard-focused,.category-button.active.keyboard-focused {background:#d8f2ff;border:2px solid #1192d9;padding:11px 9px;box-shadow:0 5px 13px rgba(20,106,159,.12)}
+.sidebar-tools {display:flex;flex-direction:column;gap:8px;padding:10px 2px 2px;margin-top:auto}
+.sidebar-tools button {display:flex;align-items:center;gap:9px;font-size:calc(12px * var(--font-scale));flex:0 0 auto}
+.sidebar-tools .settings-entry {background:#e5f7ff;border:1px solid #b4dff7;color:#116ba2}
+.sidebar-tools .settings-entry.keyboard-focused {background:#caedff;border:2px solid #118bd4;padding:10px 11px}
+.settings-icon {font-size:18px}
+.guide-clock {font-size:calc(28px * var(--font-scale))}
+/* Font scaling is applied to all text-bearing IPTV panels, preserving video dimensions. */
+.row-name {font-size:calc(11px * var(--font-scale))}
+.row-program {font-size:calc(10.5px * var(--font-scale))}
+.row-next,.row-next-title {font-size:calc(9.5px * var(--font-scale))}
+.row-next-start {font-size:calc(9px * var(--font-scale))}
+.row-logo-fallback {font-size:calc(13px * var(--font-scale))}
+.channel-row {min-height:calc(49px * var(--font-scale));padding-block:calc(5px * var(--font-scale))}
+.playing-now-box>b {font-size:calc(13px * var(--font-scale))}
+.now-label {font-size:calc(9px * var(--font-scale))}
+.current-program-meta,.up-next-label {font-size:calc(10px * var(--font-scale))}
+.schedule-time {font-size:calc(11px * var(--font-scale))}
+.schedule-copy b {font-size:calc(11px * var(--font-scale))}
+.schedule-copy small {font-size:calc(10px * var(--font-scale))}
+.popup-tag {font-size:calc(9px * var(--font-scale))}
+.program-popup h2 {font-size:calc(17px * var(--font-scale))}
+.popup-time,.popup-help {font-size:calc(10px * var(--font-scale))}
+.popup-description {font-size:calc(12px * var(--font-scale))}
+.diagnostics-body,.diagnostics-row {font-size:calc(12px * var(--font-scale))}
+.diagnostics-heading h2 {font-size:calc(21px * var(--font-scale))}
+.empty-list,.no-guide {font-size:calc(12px * var(--font-scale))}
+.onair-details h2 {font-size:clamp(18px,calc(29px * var(--font-scale)),43px)}
+.top-copy b {font-size:calc(19px * var(--font-scale))}
+/* Size chooser: accessible, keyboard-driven and usable on TV screens. */
+.font-settings {position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px}
+.font-settings-backdrop {position:absolute;inset:0;background:rgba(9,48,89,.42);backdrop-filter:blur(5px)}
+.font-settings-card {position:relative;width:min(470px,100%);max-height:90dvh;overflow-y:auto;
+  border:2px solid #fff;border-radius:21px;background:linear-gradient(150deg,#f9fdff,#ddf4ff);
+  box-shadow:0 28px 85px rgba(10,61,103,.35);padding:23px 24px 20px;color:#16466f}
+.settings-topline {display:flex;align-items:center;justify-content:space-between;color:#328fc2;font-size:10px;font-weight:900;letter-spacing:.13em}
+.settings-topline button {border:1px solid #b7dff6;background:white;color:#1c7eaf;border-radius:10px;width:35px;height:35px}
+.font-settings-card h2 {font-size:26px;margin:14px 0 5px;letter-spacing:-.04em}
+.font-settings-card p {font-size:13px;color:#678eaa;margin:0 0 20px}
+.font-size-options {display:flex;flex-direction:column;gap:7px}
+.font-size-option {position:relative;display:flex;justify-content:space-between;align-items:center;min-height:54px;
+  padding:10px 16px;border:1px solid #c7e6f6;border-radius:12px;background:#f9fdff;
+  color:#17476d;text-align:left;font-size:14px;font-weight:770}
+.font-size-option.selected {background:#d3f1ff;border-color:#45b5ec}
+.font-size-option.keyboard-focused,.font-size-option:hover {background:#bceaff;border:2px solid #108bd9;padding:9px 15px}
+.font-size-option[aria-checked="true"]:before {content:"✓";position:absolute;right:75px;color:#0b97d1;font-size:18px}
+.font-sample {font-weight:900;color:#148bc4}
+.settings-bottom {border-top:1px solid #c6e6f5;padding-top:12px;margin-top:17px;font-size:11px;color:#6c97b0;text-align:center}
+@media (max-width:1200px) {
+ .guide-layout {grid-template-columns:minmax(300px,1fr) minmax(300px,36%);padding:10px 12px;gap:10px}
+ .categories-panel {left:12px;top:10px;bottom:10px;width:clamp(210px,33vw,290px)}
+ .menu-backdrop {left:12px;top:10px;bottom:10px}
+}
+@media (max-width:850px) {
+ body {overflow:auto}
+ .guide-view {overflow-y:auto}
+ .guide-layout {grid-template-columns:minmax(0,1fr);gap:10px;overflow:visible;min-height:100vh;padding:8px}
+ .channels-panel {grid-column:1;grid-row:1;min-height:70vh}
+ .right-panel {grid-column:1;grid-row:2;height:620px;min-height:0}
+ .categories-panel {position:fixed!important;left:8px;top:8px;bottom:8px;width:min(320px,85vw);height:auto}
+ .menu-backdrop {position:fixed;inset:8px; width:auto; background:rgba(24,90,148,.25)}
+}
+@media (max-width:520px) {
+ .guide-layout {grid-template-columns:minmax(0,1fr);gap:8px;padding:8px}
+ .category-list {display:block;overflow-y:auto;white-space:normal}
+ .category-button,.category-button.active {width:100%;margin-bottom:3px;white-space:normal}
+ .categories-panel {width:min(310px,90vw)}
+ .channels-panel {grid-column:1;min-height:70vh}
+ .right-panel {grid-column:1;height:590px}
+ .channel-row {min-height:calc(52px * var(--font-scale));grid-template-columns:minmax(0,40%) minmax(0,1fr)}
+ .row-program {font-size:calc(10px * var(--font-scale))}
+ .row-next {font-size:calc(9px * var(--font-scale))}
+}
+@media (prefers-reduced-motion:reduce) {
+ .categories-panel,.menu-backdrop {transition:none}
+}
+
+/* AQUA TV 1.11 — one-line EPG and measured channel-name boundary. */
+:root {--font-px:12px}
+.channel-list {--channel-col-width:190px;overflow-x:hidden}
+.channel-row, .channel-row:focus-visible {
+  grid-template-columns:minmax(0,var(--channel-col-width)) minmax(0,1fr);
+  gap:13px;align-items:center;min-height:calc(31px * var(--font-scale));
+  padding:calc(3px * var(--font-scale)) 8px;
+}
+.row-channel-info {min-height:0;gap:7px;overflow:hidden}
+.row-logo {width:calc(25px * var(--font-scale));height:calc(25px * var(--font-scale));min-width:20px;min-height:20px;max-width:42px;max-height:42px;border-radius:5px}
+.row-text {flex:1;min-width:0;display:block}
+.row-name {display:block;position:relative;min-width:0;max-width:100%;font-size:var(--font-px);line-height:1.17;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.row-name-track {display:inline-block;white-space:nowrap;width:max-content;max-width:none;will-change:transform}
+.row-right {display:flex;flex-direction:row;align-items:center;gap:9px;min-width:0;overflow:hidden}
+.row-scroll-window {min-width:0;flex:1 1 auto;overflow:hidden;white-space:nowrap;mask-image:linear-gradient(to right,#000 0%,#000 95%,transparent 100%)}
+.row-scroll-track {display:inline-flex;align-items:baseline;white-space:nowrap;width:max-content;max-width:none;will-change:transform}
+.row-program-now {font-size:var(--font-px);font-weight:680;color:#36627f;white-space:nowrap}
+.row-program-next {font-size:var(--font-px);font-weight:520;color:#95aec2;white-space:nowrap;margin-left:12px}
+.row-bar {flex:0 0 42px;width:42px;max-width:42px;height:3px;background:#d5e6f2}
+.row-bar .epg-progress {transition:width .85s linear}
+.channel-row.epg-marquee .row-scroll-track,
+.channel-row.name-marquee .row-name-track {animation:channel-marquee var(--marquee-duration,9s) ease-in-out .45s infinite;}
+@keyframes channel-marquee {
+  0%,12% {transform:translateX(0)}
+  46%,67% {transform:translateX(var(--marquee-shift,0px))}
+  100% {transform:translateX(0)}
+}
+.font-pixel-form {display:flex;flex-direction:column;gap:10px}
+.font-pixel-form label {font-size:13px;font-weight:800;color:#2a709a}
+.font-pixel-row {display:flex;gap:10px;align-items:center}
+.font-pixel-input {height:52px;width:min(165px,38vw);min-width:0;padding:6px 14px;border:2px solid #9bcde8;border-radius:11px;background:#fff;color:#104975;font-size:22px;font-weight:850;font-variant-numeric:tabular-nums}
+.font-pixel-unit {font-size:18px;font-weight:700;color:#79a5be}
+.font-apply-button {margin-left:auto;min-width:120px;padding:14px 17px;background:#108cda;border:1px solid #0a83cf;border-radius:11px;color:#fff;font-weight:800}
+.font-pixel-help {margin:0!important;font-size:12px!important;line-height:1.6}
+@media(max-width:520px) {
+  .channel-row {grid-template-columns:minmax(0,var(--channel-col-width)) minmax(0,1fr);min-height:calc(31px * var(--font-scale));gap:8px;padding:3px 6px}
+  .channel-row .row-right {margin-left:0}
+  .row-bar {flex-basis:28px;width:28px;max-width:28px}
+  .row-program-now,.row-program-next {font-size:var(--font-px)}
+}
+@media(prefers-reduced-motion:reduce) {
+  .channel-row.epg-marquee .row-scroll-track,.channel-row.name-marquee .row-name-track {animation:none!important}
+}
+
+
+/* AQUA TV 1.12 — follow the cursor with EPG, NOT with the playing video. */
+/* The playing stream has a quiet mark; the focus belongs to exactly one zone. */
+.channel-list .channel-row:not(.keyboard-focused):focus-visible,
+.channel-list .channel-row.focused:not(.keyboard-focused) {
+  outline:0!important;
+  outline-offset:0;
+}
+.channel-list .channel-row.active:not(.keyboard-focused) {
+  background:#edf8ff;
+  border-color:transparent;
+  border-left-color:#85c5e6;
+  box-shadow:inset 2px 0 #77bfe6;
+}
+.channel-list .channel-row.keyboard-focused,
+.channel-list .channel-row.keyboard-focused:focus-visible {
+  background:#c8efff;
+  border-color:#56b7e9;
+  outline:2px solid #078dd2;
+  outline-offset:-2px;
+  box-shadow:inset 3px 0 #078dd2;
+}
+.channel-list:not(.zone-channels) .channel-row:hover:not(.active) {
+  background:transparent;
+}
+/* More programmes per page, with a smaller channel/EPG column gap. */
+.channel-list {padding:1px 5px 5px}
+.channel-row,.channel-row:focus-visible {
+  gap:6px;
+  min-height:calc(28px * var(--font-scale));
+  padding:calc(1px * var(--font-scale)) 6px;
+  border-radius:7px;
+}
+.row-channel-info {gap:6px}
+.row-right {gap:6px}
+.row-bar {flex:0 0 62px;width:62px;max-width:62px}
+/* Never let the flex EPG scroller shrink rows so text protrudes under the focus ring. */
+.program-list > .schedule-row,
+.program-list > .schedule-day,
+.program-list > .no-guide {flex:0 0 auto}
+/* EPG text stays inside its selection box, including at 32–40px. */
+.right-panel {min-width:0}
+.preview-meta,.playing-now-box,.playing-now-box>b,
+.program-list,.schedule-row,.schedule-copy,.schedule-copy b {min-width:0}
+.playing-now-box {flex-shrink:0;gap:clamp(6px,calc(6px * var(--font-scale)),13px)}
+.playing-now-box>b {overflow-wrap:anywhere;line-height:1.25}
+.current-program-meta {flex-wrap:wrap;align-items:center;row-gap:5px;line-height:1.3}
+.now-heading {min-height:max(20px,calc(20px * var(--font-scale)))}
+.schedule-row {
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr);
+  gap:clamp(7px,calc(9px * var(--font-scale)),20px);
+  align-items:center;
+  min-height:0;
+  padding:clamp(6px,calc(6px * var(--font-scale)),15px) 8px;
+  overflow:hidden;
+}
+.schedule-time {align-self:center;line-height:1.25;white-space:nowrap}
+.schedule-copy {min-width:0;align-self:center}
+.schedule-copy b {
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-overflow:clip;
+  line-height:1.28;
+}
+.schedule-row.programme-focus-item.keyboard-focused,
+.schedule-row.programme-focus-item.popup-linked {
+  box-shadow:inset 0 0 0 2px #159fe7;
+}
+@media(max-width:520px) {
+  .channel-row,.channel-row:focus-visible {gap:4px;padding:calc(1px * var(--font-scale)) 4px}
+  .row-bar {flex-basis:42px;width:42px;max-width:42px}
+  .schedule-row {padding-left:5px;padding-right:5px}
+}
+
+
+/* AQUA TV 1.13 — less distance between names and programmes. */
+.channel-row,.channel-row:focus-visible {gap:3px}
+@media(max-width:520px) {
+  .channel-row,.channel-row:focus-visible {gap:3px}
+}
+/* No 'ДАЛЕЕ' heading or date names: just a delicate day boundary. */
+.schedule-day-divider {
+  display:block;
+  flex:0 0 auto;
+  align-self:stretch;
+  height:0;
+  margin:calc(9px * var(--font-scale)) 8px calc(6px * var(--font-scale));
+  border-top:1px solid #9ecde6;
+  box-shadow:0 1px 0 rgba(255,255,255,.8);
+  pointer-events:none;
+}
+
+
+/* AQUA TV 1.14 — minimal fullscreen video and persistent TV infobar. */
+.fullscreen-stage {background:#000}
+.fullscreen-stage .video-shell {background:#000}
+.fullscreen-stage .player-placeholder {background:#000;gap:0}
+.fullscreen-stage .player-placeholder > * {display:none!important}
+.fullscreen-stage .center-play {display:none!important}
+.fullscreen-infobar {
+  position:absolute;z-index:5;bottom:0;left:0;right:0;
+  display:flex;align-items:center;gap:clamp(12px,2vw,27px);
+  padding:clamp(18px,2.8vw,38px) clamp(20px,4vw,60px) clamp(21px,3vw,38px);
+  background:linear-gradient(0deg,rgba(2,12,29,.97),rgba(4,20,44,.9) 62%,rgba(4,20,44,.74));
+  border-top:1px solid rgba(114,205,248,.28);
+  box-shadow:0 -15px 70px rgba(0,0,0,.28);
+  color:#fff;
+  /* Instant show/hide, no opacity transitions or sliding. */
+  visibility:hidden;pointer-events:none;
+  transition:none;animation:none;
+}
+.fullscreen-infobar.is-visible {visibility:visible;transition:none;animation:none}
+.infobar-logo-wrap {flex:0 0 auto;align-self:flex-start;margin-top:4px}
+.infobar-logo {width:clamp(53px,7vw,94px);height:clamp(53px,7vw,94px);border-radius:14px;display:grid;place-items:center;position:relative;overflow:hidden;background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.4)}
+.infobar-logo img {position:relative;z-index:1;width:100%;height:100%;object-fit:contain;padding:7px}
+.infobar-logo .row-logo-fallback {color:#1683bd;font-weight:900;font-size:21px;z-index:0!important}
+.infobar-main {min-width:0;flex:1 1 auto;max-width:950px;display:flex;flex-direction:column}
+.infobar-channel {font-size:clamp(16px,calc(20px * var(--font-scale)),31px);font-weight:850;line-height:1.15;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.infobar-now {font-size:clamp(14px,calc(17px * var(--font-scale)),28px);font-weight:780;line-height:1.28;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.infobar-timeline {display:flex;align-items:center;gap:15px;margin-top:10px;max-width:760px}
+.infobar-track {background:rgba(255,255,255,.21);height:5px;border-radius:12px;overflow:hidden;min-width:30px;flex:1 1 auto}
+.infobar-track .epg-progress {height:100%;border-radius:12px;background:linear-gradient(90deg,#48d6f2,#1888df);transition:width .8s linear}
+.infobar-remaining {font-size:clamp(11px,calc(12px * var(--font-scale)),18px);color:#c8e1f3;white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+.infobar-next {margin-top:9px;color:#91afc8;font-size:clamp(12px,calc(14px * var(--font-scale)),21px);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:520}
+.infobar-video-info {flex:0 0 auto;align-self:center;margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-variant-numeric:tabular-nums}
+.infobar-resolution {font-size:clamp(13px,calc(16px * var(--font-scale)),24px);font-weight:760;white-space:nowrap}
+.infobar-quality {border:1px solid rgba(117,211,255,.5);background:rgba(29,120,181,.25);color:#c9efff;min-width:44px;text-align:center;padding:5px 10px;border-radius:7px;font-size:clamp(12px,calc(14px * var(--font-scale)),20px);font-weight:850;letter-spacing:.07em}
+@media (max-width:700px){
+  .fullscreen-infobar {gap:11px;padding:15px 15px 22px;align-items:flex-start}
+  .infobar-logo {width:44px;height:44px;border-radius:9px}
+  .infobar-main {min-width:0;max-width:none}
+  .infobar-video-info {gap:5px}
+  .infobar-resolution {font-size:10px}
+  .infobar-quality {font-size:10px;padding:3px 5px;min-width:33px}
+  .infobar-channel {font-size:15px;margin-bottom:4px}
+  .infobar-now {font-size:13px}
+  .infobar-next {font-size:11px;margin-top:5px}
+  .infobar-timeline {margin-top:6px;gap:6px}
+  .infobar-remaining {font-size:10px}
+}
+
