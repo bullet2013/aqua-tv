@@ -177,6 +177,7 @@ public class MainActivity extends Activity {
             channelChangeMask.setVisibility(View.VISIBLE);
             videoLayer.setAlpha(0f);
             Log.i(TAG, "Switch #" + session + " start; new decoder and surface");
+            notifyPage("engine", "Android ExoPlayer 2 + FFmpeg Audio", 0, 0);
 
             // Fully detach the previous TextureView before preparing the next.
             // MediaItem replacement on a reused surface leaves the last frame
@@ -245,6 +246,7 @@ public class MainActivity extends Activity {
                     videoLayer.setAlpha(1f);
                     next.setVolume(userMuted ? 0f : 1f);
                     channelChangeMask.setVisibility(View.INVISIBLE);
+                    notifyPage("firstFrame", elapsedSwitchMs() + " мс", 0, 0);
                     notifyPage("playing", "", videoWidth, videoHeight);
                 }
                 @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
@@ -263,6 +265,8 @@ public class MainActivity extends Activity {
                             Format format = group.getTrackFormat(j);
                             Log.i(TAG, "Switch #" + session + " AUDIO "
                                     + format.sampleMimeType + " / " + format.codecs);
+                            notifyPage("audio", format.sampleMimeType == null
+                                    ? "Не определён" : format.sampleMimeType, 0, 0);
                         }
                     }
                 }
