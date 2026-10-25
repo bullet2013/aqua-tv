@@ -1459,6 +1459,31 @@ function wireEvents() {
     try { await navigator.clipboard.writeText(playerReport()); toast('Отчёт скопирован (содержит адрес потока)'); }
     catch (_) { toast('Копирование недоступно: откройте страницу через localhost или HTTPS.'); }
   });
+
+  // Android touch gestures: swipe right from the channel area to open the category overlay.
+  if (AQUA_NATIVE) {
+    el('fullscreenStage').addEventListener('click', event => {
+      if (state.guideOpen || state.settingsOpen) return;
+      if (event.target.closest('button,a,input')) return;
+      setGuide(true);
+    });
+    let swipeStart = null;
+    el('guideView').addEventListener('touchstart', event => {
+      if (event.touches.length !== 1) { swipeStart = null; return; }
+      const t = event.touches[0];
+      swipeStart = { x:t.clientX, y:t.clientY, at:Date.now(), target:event.target };
+    }, {passive:true});
+    el('guideView').addEventListener('touchend', event => {
+      if (!swipeStart || event.changedTouches.length !== 1) return;
+      const start = swipeStart; swipeStart = null;
+      if (!state.guideOpen || state.settingsOpen || state.menuOpen || state.popupOpen) return;
+      const t = event.changedTouches[0];
+      const dx = t.clientX - start.x, dy = t.clientY - start.y;
+      if (dx > 75 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - start.at < 850 &&
+          start.target.closest('.channels-panel')) openCategoryMenu();
+    }, {passive:true});
+  }
+
   el('previewSlot').addEventListener('click', () => setGuide(false));
   el('previewSlot').addEventListener('keydown', event => {
     if (event.target === el('previewSlot') && ['Enter', ' '].includes(event.key)) {
