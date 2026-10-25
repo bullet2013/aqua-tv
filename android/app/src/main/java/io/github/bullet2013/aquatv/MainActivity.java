@@ -1,8 +1,10 @@
 package io.github.bullet2013.aquatv;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -18,6 +20,9 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Tracks;
 import androidx.media3.datasource.HttpDataSource;
@@ -73,6 +78,10 @@ public class MainActivity extends Activity {
     private ExoSettings exoSettings;
     private String currentStreamAddress = "";
     private boolean muted = false;
+    private boolean audioAdvancing = false;
+    private String audioDecoder = "";
+    private String audioTrackState = "Ожидаем дорожки…";
+    private String audioTrackDetail = "Аудиопоток ещё не проанализирован";
     private int videoWidth = 0;
     private int videoHeight = 0;
 
@@ -157,6 +166,10 @@ public class MainActivity extends Activity {
             player.release();
         }
         player = exoSettings.createPlayer();
+        player.setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(), true);
         player.setVolume(muted ? 0f : 1f);
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
@@ -174,17 +187,56 @@ public class MainActivity extends Activity {
                 notifyPage("size", "", videoWidth, videoHeight);
             }
             @Override public void onTracksChanged(@NonNull Tracks tracks) {
-                if (!exoSettings.diagnosticsEnabled()) return;
+                boolean audioFound = false;
+                boolean supported = false;
+                boolean selected = false;
+                Format chosen = null;
+                StringBuilder variants = new StringBuilder();
                 for (Tracks.Group group : tracks.getGroups()) {
                     for (int i = 0; i < group.length; i++) {
-                        if (!group.isTrackSelected(i)) continue;
-                        androidx.media3.common.Format format = group.getTrackFormat(i);
-                        Log.i(TAG, "Selected track mime=" + format.sampleMimeType
-                                + " codec=" + format.codecs
-                                + " bitrate=" + format.bitrate
-                                + " size=" + format.width + "x" + format.height);
+                        Format format = group.getTrackFormat(i);
+                        if (exoSettings.diagnosticsEnabled() && group.isTrackSelected(i)) {
+                            Log.i(TAG, "Selected track mime=" + format.sampleMimeType
+                                    + " codec=" + format.codecs
+                                    + " bitrate=" + format.bitrate);
+                        }
+                        if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+                        audioFound = true;
+                        boolean trackSupported = group.isTrackSupported(i);
+                        boolean trackSelected = group.isTrackSelected(i);
+                        supported |= trackSupported;
+                        if (trackSelected) {
+                            selected = true;
+                            chosen = format;
+                        } else if (chosen == null) {
+                            chosen = format;
+                        }
+                        if (variants.length() > 0) variants.append(", ");
+                        variants.append(format.sampleMimeType == null ? "unknown" : format.sampleMimeType)
+                                .append(trackSupported ? " [поддерживается]" : " [не поддерживается]")
+                                .append(trackSelected ? " [выбрана]" : "");
                     }
                 }
+                if (!audioFound && tracks.getGroups().isEmpty()) {
+                    // Playlist not analyzed yet; don't report a missing track prematurely.
+                    return;
+                }
+                notifyPage("audio", chosen == null ? "Не определён" :
+                        (chosen.sampleMimeType == null ? "Неизвестный формат" : chosen.sampleMimeType), 0, 0);
+                if (!audioFound) {
+                    audioTrackState = "Аудиодорожка не найдена";
+                } else if (!supported) {
+                    audioTrackState = "Аудиокодек не поддерживается устройством";
+                } else if (!selected) {
+                    audioTrackState = "Аудиодорожка не выбрана";
+                } else {
+                    audioTrackState = audioAdvancing ? "Аудиорендерер работает" : "Аудиодорожка выбрана";
+                }
+                audioTrackDetail = "Дорожки: " + (audioFound ? variants : "нет");
+                sendAudioReport();
+            }
+            @Override public void onVolumeChanged(float volume) {
+                sendAudioReport();
             }
             @Override public void onPlayerError(@NonNull PlaybackException error) {
                 String label = error.getErrorCodeName();
@@ -200,11 +252,37 @@ public class MainActivity extends Activity {
                 notifyPage("error", label, 0, 0);
             }
         });
-        if (exoSettings.diagnosticsEnabled()) {
-            player.addAnalyticsListener(new AnalyticsListener() {
+        player.addAnalyticsListener(new AnalyticsListener() {
+                @Override public void onAudioDecoderInitialized(AnalyticsListener.EventTime time,
+                        String decoderName, long initializedTimestampMs,
+                        long initializationDurationMs) {
+                    audioDecoder = decoderName;
+                    sendAudioReport();
+                }
+                @Override public void onAudioPositionAdvancing(AnalyticsListener.EventTime time,
+                        long playoutStartSystemTimeMs) {
+                    audioAdvancing = true;
+                    if (audioTrackState.equals("Аудиодорожка выбрана")) {
+                        audioTrackState = "Аудиорендерер работает";
+                    }
+                    sendAudioReport();
+                }
+                @Override public void onAudioCodecError(AnalyticsListener.EventTime time,
+                        Exception error) {
+                    audioTrackState = "Ошибка аудиодекодера: " + error.getClass().getSimpleName();
+                    Log.w(TAG, "Audio codec error", error);
+                    sendAudioReport();
+                }
+                @Override public void onAudioSinkError(AnalyticsListener.EventTime time,
+                        Exception error) {
+                    audioTrackState = "Ошибка вывода звука: " + error.getClass().getSimpleName();
+                    Log.w(TAG, "Audio sink error", error);
+                    sendAudioReport();
+                }
                 @Override public void onLoadError(AnalyticsListener.EventTime time,
                         LoadEventInfo loadInfo, MediaLoadData mediaInfo,
                         IOException error, boolean wasCanceled) {
+                    if (!exoSettings.diagnosticsEnabled()) return;
                     // Do not log full URLs: HLS stream URLs may contain credentials or tokens.
                     String label = error.getClass().getSimpleName();
                     if (error instanceof HttpDataSource.InvalidResponseCodeException) {
@@ -216,13 +294,32 @@ public class MainActivity extends Activity {
                 }
                 @Override public void onDownstreamFormatChanged(AnalyticsListener.EventTime time,
                         MediaLoadData mediaInfo) {
+                    if (!exoSettings.diagnosticsEnabled()) return;
                     if (mediaInfo.trackFormat != null) {
                         Log.i(TAG, "Format mime=" + mediaInfo.trackFormat.sampleMimeType
                                 + " bitrate=" + mediaInfo.trackFormat.bitrate);
                     }
                 }
             });
-        }
+    }
+
+    private void sendAudioReport() {
+        if (player == null) return;
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        int deviceVolume = am == null ? -1 : am.getStreamVolume(AudioManager.STREAM_MUSIC);
+        int deviceMax = am == null ? -1 : am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        float playerVolume = player.getVolume();
+        String outputState = "Громкость ExoPlayer=" + Math.round(playerVolume * 100) + "%"
+                + ", громкость Android=" + deviceVolume + "/" + deviceMax
+                + ", mute=" + muted;
+        String status = (muted || playerVolume == 0f || deviceVolume == 0)
+                ? "Звук отключён или громкость равна нулю"
+                : audioTrackState;
+        notifyPage("audioStatus", status, 0, 0);
+        notifyPage("audioDetail", audioTrackDetail
+                + "; декодер=" + (audioDecoder.isEmpty() ? "не запущен" : audioDecoder)
+                + "; " + outputState
+                + "; аудио активировано=" + audioAdvancing, 0, 0);
     }
 
     private void applyExoSettings() {
@@ -240,6 +337,7 @@ public class MainActivity extends Activity {
                 case "mute":
                     muted = obj.optBoolean("muted", false);
                     if (player != null) player.setVolume(muted ? 0f : 1f);
+                    sendAudioReport();
                     break;
                 case "exoSettings":
                     runOnUiThread(() -> exoSettings.showDialog(this, this::applyExoSettings));
@@ -261,6 +359,13 @@ public class MainActivity extends Activity {
             }
             currentStreamAddress = address;
             videoWidth = videoHeight = 0;
+            audioAdvancing = false;
+            audioDecoder = "";
+            audioTrackState = "Ожидаем дорожки…";
+            audioTrackDetail = "Аудиопоток ещё не проанализирован";
+            notifyPage("engine", "Media3 ExoPlayer 1.11.1", 0, 0);
+            notifyPage("audio", "Не определён", 0, 0);
+            sendAudioReport();
             if (exoSettings.diagnosticsEnabled()) Log.i(TAG, "Opening stream host=" + host);
             player.setMediaItem(exoSettings.createMediaItem(uri));
             player.prepare();
