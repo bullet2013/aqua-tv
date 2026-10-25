@@ -3,11 +3,14 @@ package io.github.bullet2013.aquatv;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -66,6 +69,7 @@ public class MainActivity extends Activity {
     // Audio is unmuted only after this session's first video frame.
     private boolean userMuted = false;
     private boolean firstFrameShown = false;
+    private boolean decoderFirstFrame = false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -173,9 +177,12 @@ public class MainActivity extends Activity {
             final int session = ++switchNumber;
             switchStartMs = SystemClock.elapsedRealtime();
             firstFrameShown = false;
+            decoderFirstFrame = false;
             videoWidth = videoHeight = 0;
             channelChangeMask.setVisibility(View.VISIBLE);
-            videoLayer.setAlpha(0f);
+            // Keep the TextureView rendering so its real frame-update events
+            // arrive; the opaque sibling mask hides all green decoder output.
+            videoLayer.setAlpha(1f);
             Log.i(TAG, "Switch #" + session + " start; new decoder and surface");
             notifyPage("engine", "Android ExoPlayer 2 + FFmpeg Audio", 0, 0);
 
@@ -221,6 +228,13 @@ public class MainActivity extends Activity {
                     com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
             next.setVolume(0f);
             nextView.setPlayer(next);
+            // ExoPlayer owns the TextureView's SurfaceTextureListener. Wrap
+            // that listener rather than replacing its lifecycle callbacks.
+            // A decoded first frame can still be green until a H264 keyframe.
+            final View surfaceView = nextView.getVideoSurfaceView();
+            final TextureView texture = surfaceView instanceof TextureView
+                    ? (TextureView) surfaceView : null;
+            if (texture != null) installValidFrameObserver(texture, next, session);
             next.addListener(new Player.Listener() {
                 private boolean isCurrent() {
                     return switchNumber == session && player == next;
@@ -238,16 +252,12 @@ public class MainActivity extends Activity {
                 }
                 @Override public void onRenderedFirstFrame() {
                     if (!isCurrent() || firstFrameShown) return;
-                    firstFrameShown = true;
-                    Log.i(TAG, "Switch #" + session + " FIRST VIDEO FRAME after "
-                            + elapsedSwitchMs() + "ms");
-                    // New, independent renderer guarantees this frame is from
-                    // the new channel. Reveal picture and audio together.
-                    videoLayer.setAlpha(1f);
-                    next.setVolume(userMuted ? 0f : 1f);
-                    channelChangeMask.setVisibility(View.INVISIBLE);
-                    notifyPage("firstFrame", elapsedSwitchMs() + " мс", 0, 0);
-                    notifyPage("playing", "", videoWidth, videoHeight);
+                    decoderFirstFrame = true;
+                    Log.i(TAG, "Switch #" + session + " FIRST DECODED FRAME after "
+                            + elapsedSwitchMs() + "ms (may still be green)");
+                    // Do not unmask or unmute on this callback. A TextureView
+                    // frame inspection will signal real visual readiness.
+                    if (texture != null) inspectFrame(texture, next, session);
                 }
                 @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
                     if (!isCurrent()) return;
@@ -293,6 +303,92 @@ public class MainActivity extends Activity {
             Log.e(TAG, "Cannot start IPTV stream", exception);
             notifyPage("error", "Поток: " + exception.getMessage(), 0, 0);
         }
+    }
+
+    /**
+     * Detect the specific green/black placeholders emitted by some hardware
+     * H264 decoders until a usable IDR frame is available.  There is NO time
+     * delay: inspect each newly composited frame from Android's TextureView.
+     * ExoPlayer2 still owns the underlying SurfaceTexture lifecycle.
+     */
+    private void installValidFrameObserver(TextureView texture,
+            ExoPlayer expected, int session) {
+        final TextureView.SurfaceTextureListener delegate =
+                texture.getSurfaceTextureListener();
+        texture.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override public void onSurfaceTextureAvailable(
+                    SurfaceTexture surface, int width, int height) {
+                if (delegate != null)
+                    delegate.onSurfaceTextureAvailable(surface, width, height);
+            }
+            @Override public void onSurfaceTextureSizeChanged(
+                    SurfaceTexture surface, int width, int height) {
+                if (delegate != null)
+                    delegate.onSurfaceTextureSizeChanged(surface, width, height);
+            }
+            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+                return delegate == null || delegate.onSurfaceTextureDestroyed(surface);
+            }
+            @Override public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+                if (delegate != null) delegate.onSurfaceTextureUpdated(surface);
+                if (session == switchNumber && player == expected &&
+                        decoderFirstFrame && !firstFrameShown) {
+                    inspectFrame(texture, expected, session);
+                }
+            }
+        });
+    }
+
+    private void inspectFrame(TextureView texture, ExoPlayer expected, int session) {
+        if (session != switchNumber || player != expected ||
+                !decoderFirstFrame || firstFrameShown || !texture.isAvailable()) return;
+        Bitmap sample = null;
+        try {
+            // Sampling at 32x18 keeps GPU readback small; this only runs until
+            // the first useful frame, not during normal channel playback.
+            sample = texture.getBitmap(32, 18);
+            if (sample == null || isDecoderPlaceholder(sample)) return;
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Video texture snapshot not ready", exception);
+            return;
+        } finally {
+            if (sample != null) sample.recycle();
+        }
+
+        // We have a non-green/non-blank frame from THIS playback session.
+        firstFrameShown = true;
+        long readyMs = elapsedSwitchMs();
+        Log.i(TAG, "Switch #" + session + " FIRST VALID PICTURE after "
+                + readyMs + "ms (green frames filtered)");
+        channelChangeMask.setVisibility(View.INVISIBLE);
+        expected.setVolume(userMuted ? 0f : 1f);
+        notifyPage("firstFrame", readyMs + " мс (без зелёного кадра)", 0, 0);
+        notifyPage("playing", "", videoWidth, videoHeight);
+    }
+
+    private boolean isDecoderPlaceholder(Bitmap bitmap) {
+        int total = bitmap.getWidth() * bitmap.getHeight();
+        int green = 0;
+        int dark = 0;
+        int visible = 0;
+        for (int y = 0; y < bitmap.getHeight(); y++) {
+            for (int x = 0; x < bitmap.getWidth(); x++) {
+                int argb = bitmap.getPixel(x, y);
+                int red = Color.red(argb);
+                int g = Color.green(argb);
+                int blue = Color.blue(argb);
+                if (red < 18 && g < 18 && blue < 18) { dark++; continue; }
+                visible++;
+                if (g > 48 && g > red + 24 && g > blue + 20 &&
+                        g * 10 > red * 14 && g * 10 > blue * 14) green++;
+            }
+        }
+        // Account for black side-bars around a green SD placeholder. Genuine
+        // scenes with varied colours must not be treated as decoder failure.
+        boolean almostBlack = dark >= total * 0.95f;
+        boolean mostlyGreen = visible >= total * 0.35f &&
+                green >= visible * 0.84f;
+        return almostBlack || mostlyGreen;
     }
 
     private void positionVideo(JSONObject rect) {
