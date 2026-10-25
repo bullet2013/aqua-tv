@@ -10,6 +10,8 @@ const shell = el('videoShell');
 // On Android the application exposes this object only to the trusted GitHub origin.
 // Ordinary browsers keep hls.js/HTML5 playback unchanged.
 const AQUA_NATIVE = Boolean(window.AquaAndroid && typeof window.AquaAndroid.postMessage === 'function');
+// WebView browser-only build needs Android touch gestures without the native player.
+const AQUA_WEB_TEST = true;
 function nativeSend(payload) {
   if (!AQUA_NATIVE) return;
   try { window.AquaAndroid.postMessage(JSON.stringify(payload)); }
@@ -698,6 +700,45 @@ function playChannel(channel, initial = false) {
       maxBufferLength: 30, maxBufferSize: 40 * 1000 * 1000
     });
     state.hls = hls;
+    // Chromium WebView may reject MPEG Layer III audio multiplexed in an HLS
+    // MediaSource. Try Android's own HLS media pipeline for those streams only,
+    // leaving fast hls.js untouched for normal AAC channels.
+    let mp3NativeFallbackStarted = false;
+    const tryNativeMp3Hls = (audioTrack) => {
+      if (!audioTrack || mp3NativeFallbackStarted || session !== state.session || state.hls !== hls) return false;
+      const codec = String(audioTrack.codec || audioTrack.levelCodec || '').toLowerCase();
+      const container = String(audioTrack.container || '').toLowerCase();
+      if (!/(^|\\W)mp3($|\\W)|mp4a\\.6[9b]|audio\\/mpeg/.test(codec + ' ' + container)) return false;
+      const nativeSupport = video.canPlayType('application/vnd.apple.mpegurl') ||
+        video.canPlayType('application/x-mpegURL');
+      console.info('[AQUA WEB TEST] MPEG audio detected', codec, container,
+        'native HLS support:', nativeSupport || 'none');
+      if (!nativeSupport) {
+        // The current WebView has no native HLS engine; keep hls.js and report
+        // the actual decoding error rather than silently breaking playback.
+        return false;
+      }
+      mp3NativeFallbackStarted = true;
+      hls.destroy();
+      if (state.hls === hls) state.hls = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      video.muted = false;
+      video.src = src;
+      state.playerMode = 'Android HLS (MP3, системный)';
+      state.audioCodec = 'MP3 / MPEG Audio (нативное HLS)';
+      state.lastError = null;
+      startPlaybackWatchdog(session);
+      updateDiagnostics();
+      // loadedmetadata triggers tryPlay() for non-hls.js streams.
+      return true;
+    };
+    if (window.Hls.Events.BUFFER_CODECS) {
+      hls.on(window.Hls.Events.BUFFER_CODECS, (_event, tracks) => {
+        if (session === state.session) tryNativeMp3Hls(tracks?.audio);
+      });
+    }
     hls.on(window.Hls.Events.MEDIA_ATTACHED, () => { if (session === state.session) hls.loadSource(src); });
     hls.on(window.Hls.Events.MANIFEST_PARSED, (_event, data) => {
       if (session !== state.session) return;
@@ -709,9 +750,17 @@ function playChannel(channel, initial = false) {
       if (session !== state.session) return;
       observeCodecs(data.tracks?.video?.codec || data.tracks?.video?.levelCodec,
         data.tracks?.audio?.codec || data.tracks?.audio?.levelCodec);
+      // Source metadata is available at this point even if the browser's MSE
+      // buffer later rejects an MP3 audio track.
+      tryNativeMp3Hls(data.tracks?.audio);
     });
     hls.on(window.Hls.Events.ERROR, (_event, data) => {
       if (hls !== state.hls || session !== state.session) return;
+      // Some versions of hls.js fail codec validation before reporting the
+      // parsed track. Log the failure so diagnostics identify MSE vs network.
+      if (/codec|bufferAddCodec|bufferIncompatible/i.test(String(data.details || ''))) {
+        console.warn('[AQUA WEB TEST] MediaSource codec rejection', data.details, data.reason);
+      }
       const explained = hlsErrorMessage(data);
       const technical = hlsErrorTechnical(data);
       if (!data.fatal) {
@@ -1458,8 +1507,8 @@ function wireEvents() {
     catch (_) { toast('Копирование недоступно: откройте страницу через localhost или HTTPS.'); }
   });
 
-  // Android touch gestures: swipe right from the channel area to open the category overlay.
-  if (AQUA_NATIVE) {
+  // Android touch gestures work with either native video OR browser hls.js.
+  if (AQUA_NATIVE || AQUA_WEB_TEST) {
     let suppressFullscreenTap = false;
     let fullscreenTouchStart = null;
     el('fullscreenStage').addEventListener('touchstart', event => {
