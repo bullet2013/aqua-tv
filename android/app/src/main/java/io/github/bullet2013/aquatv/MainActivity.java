@@ -5,6 +5,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,6 +25,7 @@ import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.video.VideoSize;
 import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Tracks;
@@ -53,6 +55,8 @@ public class MainActivity extends Activity {
     private ExoPlayer player;
     private int videoWidth = 0;
     private int videoHeight = 0;
+    private long switchStartMs = 0;
+    private int switchNumber = 0;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -80,13 +84,37 @@ public class MainActivity extends Activity {
         DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
                 .setEnableDecoderFallback(true);
-        player = new ExoPlayer.Builder(this, renderers).build();
+        // Default ExoPlayer2 waits for 2500 ms of media at startup. Live TV
+        // channel surfing benefits from an earlier start; once playback begins,
+        // maintain more data to withstand jitter. Keep FFmpeg renderer enabled.
+        DefaultLoadControl quickZapping = new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                        3000,   // min media buffer while playing
+                        12000,  // max media buffer while playing
+                        300,    // startup buffer: 300ms rather than 2500ms
+                        1500)   // after genuine network rebuffering
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build();
+        player = new ExoPlayer.Builder(this, renderers)
+                .setLoadControl(quickZapping)
+                .build();
         player.setAudioAttributes(com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
-                else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
+                if (state == Player.STATE_READY) {
+                    Log.i(TAG, "Switch #" + switchNumber + " READY after "
+                            + elapsedSwitchMs() + "ms");
+                    notifyPage("playing", "", videoWidth, videoHeight);
+                } else if (state == Player.STATE_BUFFERING) {
+                    Log.d(TAG, "Switch #" + switchNumber + " buffering after "
+                            + elapsedSwitchMs() + "ms");
+                    notifyPage("buffering", "", videoWidth, videoHeight);
+                }
+            }
+            @Override public void onRenderedFirstFrame() {
+                Log.i(TAG, "Switch #" + switchNumber + " FIRST FRAME after "
+                        + elapsedSwitchMs() + "ms");
             }
             @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
                 videoWidth = size.width;
@@ -170,6 +198,10 @@ public class MainActivity extends Activity {
         } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
     }
 
+    private long elapsedSwitchMs() {
+        return switchStartMs == 0 ? -1 : SystemClock.elapsedRealtime() - switchStartMs;
+    }
+
     private void playStream(String address) {
         try {
             Uri uri = Uri.parse(address);
@@ -180,6 +212,9 @@ public class MainActivity extends Activity {
                 notifyPage("error", "Не разрешён сервер канала: " + host, 0, 0);
                 return;
             }
+            switchStartMs = SystemClock.elapsedRealtime();
+            switchNumber++;
+            Log.i(TAG, "Switch #" + switchNumber + " start");
             videoWidth = videoHeight = 0;
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
