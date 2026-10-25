@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -47,6 +48,10 @@ public class MainActivity extends Activity {
     private PlayerView playerView;
     private WebView webView;
     private ExoPlayer player;
+    private TextureView vlcView;
+    private VlcPlayback vlc;
+    private String lastStream = "";
+    private boolean muted = false;
     private int videoWidth = 0;
     private int videoHeight = 0;
 
@@ -55,6 +60,7 @@ public class MainActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
@@ -69,19 +75,25 @@ public class MainActivity extends Activity {
         playerView.setShutterBackgroundColor(Color.BLACK);
         root.addView(playerView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        vlcView = new TextureView(this);
+        vlcView.setVisibility(View.INVISIBLE);
+        root.addView(vlcView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int state) {
+                if (vlc != null && vlc.isActive()) return;
                 if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
                 else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
             }
             @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
+                if (vlc != null && vlc.isActive()) return;
                 videoWidth = size.width;
                 videoHeight = size.height;
                 notifyPage("size", "", videoWidth, videoHeight);
             }
             @Override public void onPlayerError(@NonNull PlaybackException error) {
+                if (vlc != null && vlc.isActive()) return;
                 Log.e(TAG, "Media3 playback failed", error);
                 notifyPage("error", error.getErrorCodeName(), 0, 0);
             }
@@ -89,6 +101,7 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.TRANSPARENT);
+        webView.clearCache(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -138,7 +151,7 @@ public class MainActivity extends Activity {
             switch (obj.optString("type", "")) {
                 case "play": playStream(obj.optString("url", "")); break;
                 case "rect": positionVideo(obj); break;
-                case "mute": player.setVolume(obj.optBoolean("muted", false) ? 0f : 1f); break;
+                case "mute": muted = obj.optBoolean("muted", false); player.setVolume(muted ? 0f : 1f); if (vlc != null) vlc.mute(muted); break;
                 default: break;
             }
         } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
@@ -155,10 +168,36 @@ public class MainActivity extends Activity {
                 return;
             }
             videoWidth = videoHeight = 0;
+            lastStream = address;
+            if (vlc == null) vlc = new VlcPlayback(this, vlcView, new VlcPlayback.Listener() {
+                @Override public void playing() { notifyPage("playing", "", videoWidth, videoHeight); }
+                @Override public void size(int w, int h) { videoWidth = w; videoHeight = h; notifyPage("size", "", w, h); }
+                @Override public void error() { Log.w(TAG, "LibVLC failed: trying Media3"); playMedia3(Uri.parse(lastStream)); }
+            });
+            if (vlc.available()) {
+                player.stop();
+                playerView.setVisibility(View.INVISIBLE);
+                vlc.mute(muted);
+                vlc.play(uri);
+                notifyPage("engine", "Android VLC / LibVLC", 0, 0);
+                return;
+            }
+            playMedia3(uri);
+        } catch (Exception exception) {
+            notifyPage("error", "Поток: " + exception.getMessage(), 0, 0);
+        }
+    }
+
+    private void playMedia3(Uri uri) {
+        try {
+            if (vlc != null) vlc.stop();
+            playerView.setVisibility(View.VISIBLE);
+            notifyPage("engine", "Android Media3 / ExoPlayer", 0, 0);
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
             }
+            player.setVolume(muted ? 0f : 1f);
             player.setMediaItem(item.build());
             player.prepare();
             player.play();
@@ -170,6 +209,7 @@ public class MainActivity extends Activity {
     private void positionVideo(JSONObject rect) {
         if (!rect.optBoolean("visible", true)) {
             playerView.setVisibility(View.INVISIBLE);
+            if (vlcView != null) vlcView.setVisibility(View.INVISIBLE);
             return;
         }
         double viewportWidth = rect.optDouble("viewportWidth", 0);
@@ -186,7 +226,13 @@ public class MainActivity extends Activity {
         params.leftMargin = x;
         params.topMargin = y;
         playerView.setLayoutParams(params);
-        playerView.setVisibility(View.VISIBLE);
+        if (vlcView != null) {
+            FrameLayout.LayoutParams vlcParams = new FrameLayout.LayoutParams(w, h);
+            vlcParams.leftMargin = x; vlcParams.topMargin = y;
+            vlcView.setLayoutParams(vlcParams);
+        }
+        if (vlc != null && vlc.isActive()) vlcView.setVisibility(View.VISIBLE);
+        else playerView.setVisibility(View.VISIBLE);
     }
 
     private void notifyPage(String status, String message, int width, int height) {
@@ -214,6 +260,7 @@ public class MainActivity extends Activity {
                 .show();
     }
     @Override protected void onPause() {
+        if (vlc != null) vlc.pause();
         if (player != null) player.pause();
         if (webView != null) webView.onPause();
         super.onPause();
@@ -221,9 +268,11 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
-        if (player != null && player.getMediaItemCount() > 0) player.play();
+        if (vlc != null && vlc.isActive()) vlc.resume();
+        else if (player != null && player.getMediaItemCount() > 0) player.play();
     }
     @Override protected void onDestroy() {
+        if (vlc != null) vlc.release();
         if (playerView != null) playerView.setPlayer(null);
         if (player != null) player.release();
         if (webView != null) { root.removeView(webView); webView.destroy(); }
