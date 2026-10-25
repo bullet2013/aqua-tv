@@ -40,7 +40,7 @@ jobs:
       - name: Скачать APK из Actions
         uses: actions/upload-artifact@v4
         with:
-          name: AQUA-TV-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: AQUA-TV-Android-APK-by-CPU
+          path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
