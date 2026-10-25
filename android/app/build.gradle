@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 android {
   namespace 'io.github.bullet2013.aquatv'
-  compileSdk 35
+  compileSdk 36
   defaultConfig {
     applicationId 'io.github.bullet2013.aquatv'
     minSdk 23
