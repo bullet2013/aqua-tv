@@ -28,6 +28,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Подготовить ES5-версию интерфейса для старых WebView
+        run: |
+          npm install --no-save --no-audit --no-fund @babel/core@7 @babel/cli@7 @babel/preset-env@7 core-js-bundle@3 regenerator-runtime@0.14 pako@2
+          node tools/build-legacy-ui.mjs
+          node --check loader.js
+          node --check dist/legacy/app.js
       - name: Синхронизировать плейлист (если задан AQUA_PLAYLIST_URL)
         env:
           AQUA_PLAYLIST_URL: ${{ vars.AQUA_PLAYLIST_URL }}
