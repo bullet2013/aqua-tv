@@ -929,3 +929,10 @@ html.aqua-native-android .row-right {overflow-x: hidden;}
   html.aqua-native-android .row-bar {flex-basis: 25px; width: 25px; max-width: 25px;}
   html.aqua-native-android .row-logo {max-width: 24px; max-height: 24px;}
 }
+
+/* Android-only entry to the Media3 advanced settings panel. */
+.android-exo-settings {margin-top:16px;padding-top:15px;border-top:1px solid #b7dff6}
+.android-exo-settings h3 {font-size:17px;margin:0 0 7px;color:#176b9e}
+.android-exo-settings p {font-size:12px;margin:0 0 12px}
+.android-exo-settings .font-apply-button {width:100%;min-height:44px}
+.android-exo-settings[hidden] {display:none!important}
