@@ -12,6 +12,48 @@ const shell = el('videoShell');
 const AQUA_NATIVE = Boolean(window.AquaAndroid && typeof window.AquaAndroid.postMessage === 'function');
 // Browser-only Android APK: enable touch navigation without a native player bridge.
 const AQUA_WEB_TEST = true;
+
+// This diagnostics-only build records HLS/MediaSource events. It does NOT
+// select a different renderer, alter autoplay, tune buffers or reset audio.
+const aquaProbe = { start: 0, events: [], channel: '' };
+function probeEvent(stage, details) {
+  if (!aquaProbe.start) aquaProbe.start = performance.now();
+  const suffix = String(details || '').replace(/https?:\/\/\S+/g, '[URL]').slice(0, 220);
+  const ms = Math.round(performance.now() - aquaProbe.start);
+  aquaProbe.events.push(ms + ' ms | ' + stage + (suffix ? ' | ' + suffix : ''));
+  if (aquaProbe.events.length > 35) aquaProbe.events.shift();
+}
+function probeCodecs() {
+  const formats = [
+    ['H.264 High', 'video/mp4; codecs="avc1.640028"'],
+    ['H.264 Main', 'video/mp4; codecs="avc1.4d0020"'],
+    ['AAC LC', 'audio/mp4; codecs="mp4a.40.2"'],
+    ['AC-3', 'audio/mp4; codecs="ac-3"'],
+    ['MP2', 'audio/mp4; codecs="mp4a.6A"'],
+    ['MP3', 'audio/mpeg']
+  ];
+  return formats.map(pair => {
+    const label = pair[0], mime = pair[1];
+    let mse = 'нет API';
+    try {
+      if (window.MediaSource && MediaSource.isTypeSupported)
+        mse = MediaSource.isTypeSupported(mime) ? 'да' : 'нет';
+    } catch (e) { mse = String(e.name); }
+    return label + ': MSE=' + mse + ', video.canPlayType=' + (video.canPlayType(mime) || 'нет');
+  }).join('\n');
+}
+function probeReport() {
+  return [
+    'Канал: ' + aquaProbe.channel,
+    'HTMLVideo: readyState=' + video.readyState + ', networkState=' + video.networkState +
+      ', paused=' + video.paused + ', muted=' + video.muted,
+    'Фактическое изображение: ' + video.videoWidth + ' x ' + video.videoHeight,
+    'video.error: ' + (video.error ? video.error.code + ' ' + (video.error.message || '') : 'нет'),
+    'Браузерные декодеры:', probeCodecs(), 'Этапы воспроизведения:',
+    ...(aquaProbe.events.length ? aquaProbe.events : ['событий ещё нет'])
+  ].join('\n');
+}
+
 function nativeSend(payload) {
   if (!AQUA_NATIVE) return;
   try { window.AquaAndroid.postMessage(JSON.stringify(payload)); }
@@ -568,7 +610,7 @@ function updateDiagnostics() {
   el('diagVideo').textContent = state.videoCodec;
   el('diagAudio').textContent = state.audioCodec;
   el('diagError').textContent = state.lastError?.message || (state.playing ? 'Нет ошибок' : 'Ожидаем видеопоток…');
-  el('diagTechnical').textContent = state.lastError?.technical || '—';
+  el('diagTechnical').textContent = [state.lastError?.technical, probeReport()].filter(Boolean).join('\n\n');
   el('diagAdvice').textContent = diagAdvice();
   const alt = alternateChannel();
   el('tryAlternate').hidden = !alt;
@@ -586,6 +628,8 @@ function playerReport() {
     `Аудио: ${state.audioCodec}`,
     `Ошибка: ${state.lastError?.message || '—'}`,
     `Технические данные: ${state.lastError?.technical || '—'}`,
+    '--- ANDROID WEBVIEW ---',
+    probeReport(),
     `Браузер: ${navigator.userAgent}`
   ].join('\n');
 }
@@ -637,6 +681,10 @@ function playChannel(channel, initial = false) {
   if (!channel) return;
   state.session++;
   const session = state.session;
+  aquaProbe.start = performance.now();
+  aquaProbe.events = [];
+  aquaProbe.channel = channel.name;
+  probeEvent('Выбран канал');
   clearTimeout(state.retryTimer);
   clearTimeout(state.startupTimer);
   state.activeId = channel.id;
