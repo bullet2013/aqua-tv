@@ -1,232 +1,144 @@
 package io.github.bullet2013.aquatv;
 
 import android.app.Activity;
-import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
-import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
-import androidx.media3.common.VideoSize;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.ui.PlayerView;
-import androidx.webkit.JavaScriptReplyProxy;
-import androidx.webkit.WebMessageCompat;
-import androidx.webkit.WebViewCompat;
-import androidx.webkit.WebViewFeature;
+import java.io.ByteArrayInputStream;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.util.Collections;
-import java.util.Set;
-
-/** Remote AQUA TV HTML with native HLS playback and an origin-restricted bridge. */
+/**
+ * Experimental browser-only AQUA TV: the same hls.js and HTML video that
+ * worked in Firefox on localhost. NO ExoPlayer/FFmpeg/native video bridge.
+ * This app is intentionally separately installable from regular AQUA TV.
+ */
 public class MainActivity extends Activity {
-    private static final String TAG = "AQUA-TV";
+    private static final String TAG = "AQUA-WEB-TEST";
     private static final String SITE = "https://bullet2013.github.io/aqua-tv/";
-    private static final String ORIGIN = "https://bullet2013.github.io";
-    private static final Set<String> ALLOWED_STREAM_HOSTS = Collections.singleton("31.41.12.104");
-
-    private FrameLayout root;
-    private PlayerView playerView;
+    private static final String MEDIA_HOST = "31.41.12.104";
     private WebView webView;
-    private ExoPlayer player;
-    private int videoWidth = 0;
-    private int videoHeight = 0;
 
-    @Override protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-
-        root = new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
-        setContentView(root);
-        // TextureView supports proper compositing below a transparent WebView.
-        playerView = (PlayerView) LayoutInflater.from(this).inflate(R.layout.native_player, root, false);
-        playerView.setUseController(false);
-        playerView.setShutterBackgroundColor(Color.BLACK);
-        root.addView(playerView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
-                else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
-            }
-            @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
-                videoWidth = size.width;
-                videoHeight = size.height;
-                notifyPage("size", "", videoWidth, videoHeight);
-            }
-            @Override public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "Media3 playback failed", error);
-                notifyPage("error", error.getErrorCodeName(), 0, 0);
-            }
-        });
-
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.TRANSPARENT);
+        webView.setBackgroundColor(Color.BLACK);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        setContentView(webView);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
-        webView.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri uri = request.getUrl();
-                String path = uri.getPath();
-                return !"https".equalsIgnoreCase(uri.getScheme())
-                        || !"bullet2013.github.io".equalsIgnoreCase(uri.getHost())
-                        || path == null || !path.startsWith("/aqua-tv/");
+        // The live site uses HTTPS, but the channels are HTTP HLS. This
+        // setting is ONLY for this separately identifiable experiment.
+        // The interceptor below blocks other cleartext hosts.
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage m) {
+                Log.d(TAG, m.messageLevel() + " " + m.message() +
+                        " (" + m.sourceId() + ":" + m.lineNumber() + ")");
+                return true;
             }
         });
-        root.addView(webView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        // AndroidX WebMessageListener is safer than addJavascriptInterface:
-        // only https://bullet2013.github.io and only the main frame can command video.
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(webView, "AquaAndroid",
-                Collections.singleton(ORIGIN),
-                new WebViewCompat.WebMessageListener() {
-                    @Override public void onPostMessage(@NonNull WebView view,
-                            @NonNull WebMessageCompat message,
-                            @NonNull Uri sourceOrigin, boolean isMainFrame,
-                            @NonNull JavaScriptReplyProxy replyProxy) {
-                        if (!isMainFrame || !ORIGIN.equals(sourceOrigin.toString())) return;
-                        String json = message.getData();
-                        if (json != null && json.length() < 8192) handleSiteMessage(json);
-                    }
-                });
-        } else {
-            Toast.makeText(this, "Обновите Android System WebView", Toast.LENGTH_LONG).show();
-        }
+        webView.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                return !"https".equalsIgnoreCase(u.getScheme())
+                    || !"bullet2013.github.io".equalsIgnoreCase(u.getHost())
+                    || u.getPath() == null || !u.getPath().startsWith("/aqua-tv/");
+            }
+            @Override public WebResourceResponse shouldInterceptRequest(
+                    WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if ("http".equalsIgnoreCase(uri.getScheme())
+                        && !MEDIA_HOST.equalsIgnoreCase(uri.getHost())) {
+                    Log.w(TAG, "Blocked other HTTP resource: " + uri.getHost());
+                    return new WebResourceResponse("text/plain", "UTF-8",
+                            new ByteArrayInputStream(new byte[0]));
+                }
+                return null;
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                if (!url.startsWith(SITE)) return;
+                // Adapt the existing two-column Android layout, but RESTORE
+                // the HTML <video> visibility disabled for native ExoPlayer.
+                // This test does not modify the deployed GitHub Pages site.
+                String js = """
+                    (function() {
+                      document.documentElement.classList.add('aqua-native-android');
+                      let style = document.getElementById('aqua-webview-hls-style');
+                      if (!style) {
+                        style = document.createElement('style');
+                        style.id = 'aqua-webview-hls-style';
+                        document.head.appendChild(style);
+                      }
+                      style.textContent = [
+                        'html.aqua-native-android,html.aqua-native-android body{background:#e5f6ff!important}',
+                        'html.aqua-native-android .video-shell video{opacity:1!important;background:#000!important}',
+                        'html.aqua-native-android .video-shell .player-placeholder{display:flex!important}',
+                        'html.aqua-native-android .video-shell .player-placeholder[hidden]{display:none!important}',
+                        'html.aqua-native-android .fullscreen-stage .video-shell{background:#000!important}',
+                        'html.aqua-native-android .preview-slot .video-shell{background:#000!important}',
+                        'html.aqua-native-android .guide-view{background:#94d8f9!important}',
+                        'html.aqua-native-android .guide-view::before{display:none!important}',
+                        'html.aqua-native-android .right-panel{background:rgba(245,252,255,.93)!important}',
+                        'html.aqua-native-android .right-panel::before{display:none!important}'
+                      ].join('');
+                      const full = document.getElementById('fullscreenStage');
+                      if (full && !full.dataset.aquaBrowserTap) {
+                        full.dataset.aquaBrowserTap = '1';
+                        full.addEventListener('click', function() {
+                          if (document.getElementById('guideView').hidden &&
+                              typeof setGuide === 'function') setGuide(true);
+                        });
+                      }
+                    })();
+                    """;
+                view.evaluateJavascript(js, null);
+            }
+        });
         webView.loadUrl(SITE);
     }
 
-    private void handleSiteMessage(String json) {
-        try {
-            JSONObject obj = new JSONObject(json);
-            switch (obj.optString("type", "")) {
-                case "play": playStream(obj.optString("url", "")); break;
-                case "rect": positionVideo(obj); break;
-                case "mute": player.setVolume(obj.optBoolean("muted", false) ? 0f : 1f); break;
-                default: break;
-            }
-        } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
-    }
-
-    private void playStream(String address) {
-        try {
-            Uri uri = Uri.parse(address);
-            String scheme = uri.getScheme();
-            String host = uri.getHost();
-            if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
-                    || host == null || !ALLOWED_STREAM_HOSTS.contains(host.toLowerCase())) {
-                notifyPage("error", "Не разрешён сервер канала: " + host, 0, 0);
-                return;
-            }
-            videoWidth = videoHeight = 0;
-            MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
-            if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
-                item.setMimeType(MimeTypes.APPLICATION_M3U8);
-            }
-            player.setMediaItem(item.build());
-            player.prepare();
-            player.play();
-        } catch (Exception exception) {
-            notifyPage("error", "Поток: " + exception.getMessage(), 0, 0);
-        }
-    }
-
-    private void positionVideo(JSONObject rect) {
-        if (!rect.optBoolean("visible", true)) {
-            playerView.setVisibility(View.INVISIBLE);
-            return;
-        }
-        double viewportWidth = rect.optDouble("viewportWidth", 0);
-        double viewportHeight = rect.optDouble("viewportHeight", 0);
-        if (viewportWidth <= 0 || viewportHeight <= 0 || webView.getWidth() <= 0) return;
-        double sx = webView.getWidth() / viewportWidth;
-        double sy = webView.getHeight() / viewportHeight;
-        int x = (int) Math.round(rect.optDouble("x", 0) * sx);
-        int y = (int) Math.round(rect.optDouble("y", 0) * sy);
-        int w = (int) Math.round(rect.optDouble("width", 0) * sx);
-        int h = (int) Math.round(rect.optDouble("height", 0) * sy);
-        if (w < 20 || h < 20) return;
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(w, h);
-        params.leftMargin = x;
-        params.topMargin = y;
-        playerView.setLayoutParams(params);
-        playerView.setVisibility(View.VISIBLE);
-    }
-
-    private void notifyPage(String status, String message, int width, int height) {
-        if (webView == null) return;
-        String script = "window.AquaNative&&window.AquaNative.onStatus("
-                + JSONObject.quote(status) + "," + JSONObject.quote(message) + ","
-                + width + "," + height + ");";
-        webView.post(() -> webView.evaluateJavascript(script, null));
-    }
-
-    @Override public void onConfigurationChanged(@NonNull Configuration configuration) {
-        super.onConfigurationChanged(configuration);
-        if (webView != null) webView.post(() -> webView.evaluateJavascript(
-                "if(window.updateNativeVideoRect)updateNativeVideoRect()", null));
-    }
     @Override public void onBackPressed() {
         new android.app.AlertDialog.Builder(this)
-                .setTitle("AQUA TV")
+                .setTitle("AQUA TV WEB TEST")
                 .setMessage("Выйти из приложения?")
                 .setNegativeButton("Отмена", (dialog, which) -> dialog.dismiss())
-                .setPositiveButton("Выйти", (dialog, which) -> {
-                    if (player != null) player.stop();
-                    finish();
-                })
+                .setPositiveButton("Выйти", (dialog, which) -> finish())
                 .show();
     }
     @Override protected void onPause() {
-        if (player != null) player.pause();
         if (webView != null) webView.onPause();
         super.onPause();
     }
     @Override protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
-        if (player != null && player.getMediaItemCount() > 0) player.play();
     }
     @Override protected void onDestroy() {
-        if (playerView != null) playerView.setPlayer(null);
-        if (player != null) player.release();
-        if (webView != null) { root.removeView(webView); webView.destroy(); }
+        if (webView != null) webView.destroy();
         super.onDestroy();
     }
 }
