@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
 
     private FrameLayout root;
     private PlayerView playerView;
+    private FrameLayout videoLayer;
     // Always cover the old video surface until the new stream renders a frame.
     // This mask is below WebView and is positioned over preview or fullscreen.
     private View channelChangeMask;
@@ -60,8 +61,9 @@ public class MainActivity extends Activity {
     private int videoHeight = 0;
     private long switchStartMs = 0;
     private int switchNumber = 0;
-    // Audio starts much earlier than decoded live HLS video on some streams.
-    // Start the media immediately, but expose sound only with its first frame.
+    // Each channel owns its own ExoPlayer and TextureView. ExoPlayer does not
+    // render frames from an older MediaItem onto the replacement video surface.
+    // Audio is unmuted only after this session's first video frame.
     private boolean userMuted = false;
     private boolean firstFrameShown = false;
 
@@ -78,92 +80,17 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
-        // TextureView supports proper compositing below a transparent WebView.
-        playerView = (PlayerView) LayoutInflater.from(this).inflate(R.layout.native_player, root, false);
-        playerView.setUseController(false);
-        playerView.setShutterBackgroundColor(Color.BLACK);
-        playerView.setKeepContentOnPlayerReset(false);
-        root.addView(playerView, new FrameLayout.LayoutParams(
+        // The HTML layout determines preview/fullscreen bounds. A disposable
+        // PlayerView is installed inside this layer for EVERY new channel.
+        // Keeping the old texture around caused previous-channel ghost frames.
+        videoLayer = new FrameLayout(this);
+        root.addView(videoLayer, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         channelChangeMask = new View(this);
         channelChangeMask.setBackgroundColor(Color.BLACK);
         channelChangeMask.setVisibility(View.INVISIBLE);
         root.addView(channelChangeMask, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // Test the original Google ExoPlayer 2.x pipeline used by OTT-play EXO2.
-        // Exo2-mod style experiment: prefer software FFmpeg for audio (MP2, AC3,
-        // EAC3, etc.) while keeping the Android hardware video decoder.
-        // The extension's audio renderer is discovered reflectively from the AAR.
-        DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-                .setEnableDecoderFallback(true);
-        // Default ExoPlayer2 waits for 2500 ms of media at startup. Live TV
-        // channel surfing benefits from an earlier start; once playback begins,
-        // maintain more data to withstand jitter. Keep FFmpeg renderer enabled.
-        DefaultLoadControl quickZapping = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                        3000,   // min media buffer while playing
-                        12000,  // max media buffer while playing
-                        300,    // startup buffer: 300ms rather than 2500ms
-                        1500)   // after genuine network rebuffering
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build();
-        player = new ExoPlayer.Builder(this, renderers)
-                .setLoadControl(quickZapping)
-                .build();
-        player.setAudioAttributes(com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) {
-                    Log.i(TAG, "Switch #" + switchNumber + " READY after "
-                            + elapsedSwitchMs() + "ms; videoFrame=" + firstFrameShown);
-                    // STATE_READY may occur for audio well before video. Do not
-                    // tell the webpage the stream is visible until a frame renders.
-                } else if (state == Player.STATE_BUFFERING) {
-                    Log.d(TAG, "Switch #" + switchNumber + " buffering after "
-                            + elapsedSwitchMs() + "ms");
-                    notifyPage("buffering", "", videoWidth, videoHeight);
-                }
-            }
-            @Override public void onRenderedFirstFrame() {
-                Log.i(TAG, "Switch #" + switchNumber + " FIRST FRAME after "
-                        + elapsedSwitchMs() + "ms; liveOffset=" + player.getCurrentLiveOffset());
-                if (!firstFrameShown) {
-                    firstFrameShown = true;
-                    // Synchronize audible sound with the actual displayed frame.
-                    // No artificial timeout: playback and decoding ran concurrently.
-                    player.setVolume(userMuted ? 0f : 1f);
-                    // This callback comes from the video renderer, not from
-                    // audio-ready state or a fixed timer.
-                    channelChangeMask.setVisibility(View.INVISIBLE);
-                    notifyPage("playing", "", videoWidth, videoHeight);
-                }
-            }
-            @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
-                videoWidth = size.width;
-                videoHeight = size.height;
-                notifyPage("size", "", videoWidth, videoHeight);
-            }
-            @Override public void onTracksChanged(@NonNull Tracks tracks) {
-                for (int groupIndex = 0; groupIndex < tracks.getGroups().size(); groupIndex++) {
-                    Tracks.Group group = tracks.getGroups().get(groupIndex);
-                    if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
-                    for (int trackIndex = 0; trackIndex < group.length; trackIndex++) {
-                        if (!group.isTrackSelected(trackIndex)) continue;
-                        Format fmt = group.getTrackFormat(trackIndex);
-                        Log.i(TAG, "EXO2 audio format: " + fmt.sampleMimeType
-                                + " codecs=" + fmt.codecs
-                                + " channels=" + fmt.channelCount
-                                + " supported=" + group.isTrackSupported(trackIndex));
-                    }
-                }
-            }
-            @Override public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "Legacy ExoPlayer2 playback failed", error);
-                notifyPage("error", error.getErrorCodeName(), 0, 0);
-            }
-        });
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.TRANSPARENT);
@@ -218,7 +145,8 @@ public class MainActivity extends Activity {
                 case "rect": positionVideo(obj); break;
                 case "mute":
                     userMuted = obj.optBoolean("muted", false);
-                    player.setVolume((userMuted || !firstFrameShown) ? 0f : 1f);
+                    if (player != null)
+                        player.setVolume((userMuted || !firstFrameShown) ? 0f : 1f);
                     break;
                 default: break;
             }
@@ -239,38 +167,133 @@ public class MainActivity extends Activity {
                 notifyPage("error", "Не разрешён сервер канала: " + host, 0, 0);
                 return;
             }
+
+            // Invalidate ALL callbacks from the previous playback session.
+            // A frame belonging to channel A must never unlock channel B.
+            final int session = ++switchNumber;
             switchStartMs = SystemClock.elapsedRealtime();
-            switchNumber++;
-            Log.i(TAG, "Switch #" + switchNumber + " start");
             firstFrameShown = false;
-            // Hide stale video immediately; ExoPlayer can retain the last
-            // decoded frame even after switching MediaItem.
-            channelChangeMask.setVisibility(View.VISIBLE);
-            player.setVolume(0f); // hold audio only until decoded video first frame
             videoWidth = videoHeight = 0;
+            channelChangeMask.setVisibility(View.VISIBLE);
+            videoLayer.setAlpha(0f);
+            Log.i(TAG, "Switch #" + session + " start; new decoder and surface");
+
+            // Fully detach the previous TextureView before preparing the next.
+            // MediaItem replacement on a reused surface leaves the last frame
+            // there and produces the exact ghost-frame bug reported on Android.
+            ExoPlayer old = player;
+            player = null;
+            if (playerView != null) {
+                playerView.setPlayer(null);
+                videoLayer.removeView(playerView);
+                playerView = null;
+            }
+            if (old != null) {
+                old.stop();
+                old.release();
+            }
+
+            PlayerView nextView = (PlayerView) LayoutInflater.from(this)
+                    .inflate(R.layout.native_player, videoLayer, false);
+            nextView.setUseController(false);
+            nextView.setShutterBackgroundColor(Color.BLACK);
+            nextView.setKeepContentOnPlayerReset(false);
+            videoLayer.addView(nextView, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Keep the FFmpeg audio extension. Reusing only the factories does
+            // not share the old decoded output or a stale playback timeline.
+            DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                    .setEnableDecoderFallback(true);
+            DefaultLoadControl quickZapping = new DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(3000, 12000, 300, 1500)
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build();
+            final ExoPlayer next = new ExoPlayer.Builder(this, renderers)
+                    .setLoadControl(quickZapping)
+                    .build();
+            player = next;
+            playerView = nextView;
+            next.setAudioAttributes(
+                    com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
+            next.setVolume(0f);
+            nextView.setPlayer(next);
+            next.addListener(new Player.Listener() {
+                private boolean isCurrent() {
+                    return switchNumber == session && player == next;
+                }
+                @Override public void onPlaybackStateChanged(int state) {
+                    if (!isCurrent()) return;
+                    if (state == Player.STATE_READY) {
+                        Log.i(TAG, "Switch #" + session + " READY after "
+                                + elapsedSwitchMs() + "ms");
+                    } else if (state == Player.STATE_BUFFERING) {
+                        Log.d(TAG, "Switch #" + session + " buffering after "
+                                + elapsedSwitchMs() + "ms");
+                        notifyPage("buffering", "", videoWidth, videoHeight);
+                    }
+                }
+                @Override public void onRenderedFirstFrame() {
+                    if (!isCurrent() || firstFrameShown) return;
+                    firstFrameShown = true;
+                    Log.i(TAG, "Switch #" + session + " FIRST VIDEO FRAME after "
+                            + elapsedSwitchMs() + "ms");
+                    // New, independent renderer guarantees this frame is from
+                    // the new channel. Reveal picture and audio together.
+                    videoLayer.setAlpha(1f);
+                    next.setVolume(userMuted ? 0f : 1f);
+                    channelChangeMask.setVisibility(View.INVISIBLE);
+                    notifyPage("playing", "", videoWidth, videoHeight);
+                }
+                @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
+                    if (!isCurrent()) return;
+                    videoWidth = size.width;
+                    videoHeight = size.height;
+                    notifyPage("size", "", videoWidth, videoHeight);
+                }
+                @Override public void onTracksChanged(@NonNull Tracks tracks) {
+                    if (!isCurrent()) return;
+                    for (int i = 0; i < tracks.getGroups().size(); i++) {
+                        Tracks.Group group = tracks.getGroups().get(i);
+                        if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+                        for (int j = 0; j < group.length; j++) {
+                            if (!group.isTrackSelected(j)) continue;
+                            Format format = group.getTrackFormat(j);
+                            Log.i(TAG, "Switch #" + session + " AUDIO "
+                                    + format.sampleMimeType + " / " + format.codecs);
+                        }
+                    }
+                }
+                @Override public void onPlayerError(@NonNull PlaybackException error) {
+                    if (!isCurrent()) return;
+                    Log.e(TAG, "EXO2/FFmpeg playback failed on #" + session, error);
+                    notifyPage("error", error.getErrorCodeName(), 0, 0);
+                }
+            });
+
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                // Standard live HLS starts about 3 segments behind the edge.
-                // IPTV zapping should start at a more recent complete segment.
-                // ExoPlayer clamps the offset to available playlist segments.
                 item.setLiveConfiguration(new MediaItem.LiveConfiguration.Builder()
                         .setTargetOffsetMs(3000L)
                         .setMinPlaybackSpeed(1.0f)
                         .setMaxPlaybackSpeed(1.03f)
                         .build());
             }
-            player.setMediaItem(item.build());
-            player.prepare();
-            player.play();
+            next.setMediaItem(item.build());
+            next.prepare();
+            next.play();
         } catch (Exception exception) {
+            Log.e(TAG, "Cannot start IPTV stream", exception);
             notifyPage("error", "Поток: " + exception.getMessage(), 0, 0);
         }
     }
 
     private void positionVideo(JSONObject rect) {
         if (!rect.optBoolean("visible", true)) {
-            playerView.setVisibility(View.INVISIBLE);
+            videoLayer.setVisibility(View.INVISIBLE);
             channelChangeMask.setVisibility(View.INVISIBLE);
             return;
         }
@@ -287,14 +310,14 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(w, h);
         params.leftMargin = x;
         params.topMargin = y;
-        playerView.setLayoutParams(params);
+        videoLayer.setLayoutParams(params);
         // The opaque mask follows exactly the same WebView video rectangle.
         FrameLayout.LayoutParams maskParams = new FrameLayout.LayoutParams(w, h);
         maskParams.leftMargin = x;
         maskParams.topMargin = y;
         channelChangeMask.setLayoutParams(maskParams);
         channelChangeMask.setVisibility(firstFrameShown ? View.INVISIBLE : View.VISIBLE);
-        playerView.setVisibility(View.VISIBLE);
+        videoLayer.setVisibility(View.VISIBLE);
     }
 
     private void notifyPage(String status, String message, int width, int height) {
@@ -334,6 +357,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (playerView != null) playerView.setPlayer(null);
         if (player != null) player.release();
+        if (videoLayer != null) videoLayer.removeAllViews();
         if (webView != null) { root.removeView(webView); webView.destroy(); }
         super.onDestroy();
     }
