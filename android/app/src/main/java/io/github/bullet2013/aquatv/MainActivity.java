@@ -19,7 +19,11 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
+import androidx.media3.common.Tracks;
+import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
+import androidx.media3.exoplayer.source.LoadEventInfo;
+import androidx.media3.exoplayer.source.MediaLoadData;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
@@ -33,6 +37,7 @@ import androidx.webkit.WebViewFeature;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Set;
 
@@ -47,6 +52,9 @@ public class MainActivity extends Activity {
     private PlayerView playerView;
     private WebView webView;
     private ExoPlayer player;
+    private ExoSettings exoSettings;
+    private String currentStreamAddress = "";
+    private boolean muted = false;
     private int videoWidth = 0;
     private int videoHeight = 0;
 
@@ -69,23 +77,8 @@ public class MainActivity extends Activity {
         playerView.setShutterBackgroundColor(Color.BLACK);
         root.addView(playerView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
-                else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
-            }
-            @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
-                videoWidth = size.width;
-                videoHeight = size.height;
-                notifyPage("size", "", videoWidth, videoHeight);
-            }
-            @Override public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "Media3 playback failed", error);
-                notifyPage("error", error.getErrorCodeName(), 0, 0);
-            }
-        });
+        exoSettings = new ExoSettings(this);
+        configurePlayer();
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.TRANSPARENT);
@@ -132,13 +125,99 @@ public class MainActivity extends Activity {
         webView.loadUrl(SITE);
     }
 
+    private void configurePlayer() {
+        if (player != null) {
+            playerView.setPlayer(null);
+            player.release();
+        }
+        player = exoSettings.createPlayer();
+        player.setVolume(muted ? 0f : 1f);
+        playerView.setPlayer(player);
+        player.addListener(new Player.Listener() {
+            @Override public void onPlaybackStateChanged(int state) {
+                if (exoSettings.diagnosticsEnabled()) {
+                    Log.i(TAG, "Exo state=" + state
+                            + " bufferedMs=" + player.getTotalBufferedDuration());
+                }
+                if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
+                else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
+            }
+            @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
+                videoWidth = size.width;
+                videoHeight = size.height;
+                notifyPage("size", "", videoWidth, videoHeight);
+            }
+            @Override public void onTracksChanged(@NonNull Tracks tracks) {
+                if (!exoSettings.diagnosticsEnabled()) return;
+                for (Tracks.Group group : tracks.getGroups()) {
+                    for (int i = 0; i < group.length; i++) {
+                        if (!group.isTrackSelected(i)) continue;
+                        androidx.media3.common.Format format = group.getTrackFormat(i);
+                        Log.i(TAG, "Selected track mime=" + format.sampleMimeType
+                                + " codec=" + format.codecs
+                                + " bitrate=" + format.bitrate
+                                + " size=" + format.width + "x" + format.height);
+                    }
+                }
+            }
+            @Override public void onPlayerError(@NonNull PlaybackException error) {
+                String label = error.getErrorCodeName();
+                Throwable cause = error;
+                while (cause != null) {
+                    if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                        label += " · HTTP " + ((HttpDataSource.InvalidResponseCodeException) cause).responseCode;
+                        break;
+                    }
+                    cause = cause.getCause();
+                }
+                Log.e(TAG, "Media3 playback failed: " + label, error);
+                notifyPage("error", label, 0, 0);
+            }
+        });
+        if (exoSettings.diagnosticsEnabled()) {
+            player.addAnalyticsListener(new AnalyticsListener() {
+                @Override public void onLoadError(AnalyticsListener.EventTime time,
+                        LoadEventInfo loadInfo, MediaLoadData mediaInfo,
+                        IOException error, boolean wasCanceled) {
+                    // Do not log full URLs: HLS stream URLs may contain credentials or tokens.
+                    String label = error.getClass().getSimpleName();
+                    if (error instanceof HttpDataSource.InvalidResponseCodeException) {
+                        label += " HTTP " + ((HttpDataSource.InvalidResponseCodeException) error).responseCode;
+                    }
+                    Log.w(TAG, "Exo load error: " + label
+                            + " dataType=" + mediaInfo.dataType
+                            + " canceled=" + wasCanceled);
+                }
+                @Override public void onDownstreamFormatChanged(AnalyticsListener.EventTime time,
+                        MediaLoadData mediaInfo) {
+                    if (mediaInfo.trackFormat != null) {
+                        Log.i(TAG, "Format mime=" + mediaInfo.trackFormat.sampleMimeType
+                                + " bitrate=" + mediaInfo.trackFormat.bitrate);
+                    }
+                }
+            });
+        }
+    }
+
+    private void applyExoSettings() {
+        String streamToRestart = currentStreamAddress;
+        configurePlayer();
+        if (!streamToRestart.isEmpty()) playStream(streamToRestart);
+    }
+
     private void handleSiteMessage(String json) {
         try {
             JSONObject obj = new JSONObject(json);
             switch (obj.optString("type", "")) {
                 case "play": playStream(obj.optString("url", "")); break;
                 case "rect": positionVideo(obj); break;
-                case "mute": player.setVolume(obj.optBoolean("muted", false) ? 0f : 1f); break;
+                case "mute":
+                    muted = obj.optBoolean("muted", false);
+                    if (player != null) player.setVolume(muted ? 0f : 1f);
+                    break;
+                case "exoSettings":
+                    runOnUiThread(() -> exoSettings.showDialog(this, this::applyExoSettings));
+                    break;
                 default: break;
             }
         } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
@@ -154,12 +233,10 @@ public class MainActivity extends Activity {
                 notifyPage("error", "Не разрешён сервер канала: " + host, 0, 0);
                 return;
             }
+            currentStreamAddress = address;
             videoWidth = videoHeight = 0;
-            MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
-            if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
-                item.setMimeType(MimeTypes.APPLICATION_M3U8);
-            }
-            player.setMediaItem(item.build());
+            if (exoSettings.diagnosticsEnabled()) Log.i(TAG, "Opening stream host=" + host);
+            player.setMediaItem(exoSettings.createMediaItem(uri));
             player.prepare();
             player.play();
         } catch (Exception exception) {
