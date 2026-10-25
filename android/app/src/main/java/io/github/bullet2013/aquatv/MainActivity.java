@@ -51,6 +51,9 @@ public class MainActivity extends Activity {
 
     private FrameLayout root;
     private PlayerView playerView;
+    // Always cover the old video surface until the new stream renders a frame.
+    // This mask is below WebView and is positioned over preview or fullscreen.
+    private View channelChangeMask;
     private WebView webView;
     private ExoPlayer player;
     private int videoWidth = 0;
@@ -79,7 +82,13 @@ public class MainActivity extends Activity {
         playerView = (PlayerView) LayoutInflater.from(this).inflate(R.layout.native_player, root, false);
         playerView.setUseController(false);
         playerView.setShutterBackgroundColor(Color.BLACK);
+        playerView.setKeepContentOnPlayerReset(false);
         root.addView(playerView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        channelChangeMask = new View(this);
+        channelChangeMask.setBackgroundColor(Color.BLACK);
+        channelChangeMask.setVisibility(View.INVISIBLE);
+        root.addView(channelChangeMask, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Test the original Google ExoPlayer 2.x pipeline used by OTT-play EXO2.
         // Exo2-mod style experiment: prefer software FFmpeg for audio (MP2, AC3,
@@ -125,6 +134,9 @@ public class MainActivity extends Activity {
                     // Synchronize audible sound with the actual displayed frame.
                     // No artificial timeout: playback and decoding ran concurrently.
                     player.setVolume(userMuted ? 0f : 1f);
+                    // This callback comes from the video renderer, not from
+                    // audio-ready state or a fixed timer.
+                    channelChangeMask.setVisibility(View.INVISIBLE);
                     notifyPage("playing", "", videoWidth, videoHeight);
                 }
             }
@@ -231,6 +243,9 @@ public class MainActivity extends Activity {
             switchNumber++;
             Log.i(TAG, "Switch #" + switchNumber + " start");
             firstFrameShown = false;
+            // Hide stale video immediately; ExoPlayer can retain the last
+            // decoded frame even after switching MediaItem.
+            channelChangeMask.setVisibility(View.VISIBLE);
             player.setVolume(0f); // hold audio only until decoded video first frame
             videoWidth = videoHeight = 0;
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
@@ -256,6 +271,7 @@ public class MainActivity extends Activity {
     private void positionVideo(JSONObject rect) {
         if (!rect.optBoolean("visible", true)) {
             playerView.setVisibility(View.INVISIBLE);
+            channelChangeMask.setVisibility(View.INVISIBLE);
             return;
         }
         double viewportWidth = rect.optDouble("viewportWidth", 0);
@@ -272,6 +288,12 @@ public class MainActivity extends Activity {
         params.leftMargin = x;
         params.topMargin = y;
         playerView.setLayoutParams(params);
+        // The opaque mask follows exactly the same WebView video rectangle.
+        FrameLayout.LayoutParams maskParams = new FrameLayout.LayoutParams(w, h);
+        maskParams.leftMargin = x;
+        maskParams.topMargin = y;
+        channelChangeMask.setLayoutParams(maskParams);
+        channelChangeMask.setVisibility(firstFrameShown ? View.INVISIBLE : View.VISIBLE);
         playerView.setVisibility(View.VISIBLE);
     }
 
