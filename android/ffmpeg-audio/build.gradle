@@ -9,6 +9,7 @@ android {
   externalNativeBuild {
     cmake { path 'src/main/jni/CMakeLists.txt'; version '3.22.1' }
   }
+  sourceSets { main.java.srcDirs += 'src/main/java' }
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
