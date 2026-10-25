@@ -203,9 +203,15 @@ public class MainActivity extends Activity {
                 "if(window.updateNativeVideoRect)updateNativeVideoRect()", null));
     }
     @Override public void onBackPressed() {
-        if (webView != null) {
-            webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))", null);
-        } else super.onBackPressed();
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("AQUA TV")
+                .setMessage("Выйти из приложения?")
+                .setNegativeButton("Отмена", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Выйти", (dialog, which) -> {
+                    if (player != null) player.stop();
+                    finish();
+                })
+                .show();
     }
     @Override protected void onPause() {
         if (player != null) player.pause();
