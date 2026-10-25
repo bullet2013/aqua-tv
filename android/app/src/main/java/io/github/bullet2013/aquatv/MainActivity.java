@@ -24,6 +24,10 @@ import com.google.android.exoplayer2.PlaybackException;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.video.VideoSize;
 import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.DefaultRenderersFactory;
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Tracks;
+import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.ui.PlayerView;
 import androidx.webkit.JavaScriptReplyProxy;
 import androidx.webkit.WebMessageCompat;
@@ -70,7 +74,13 @@ public class MainActivity extends Activity {
         root.addView(playerView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         // Test the original Google ExoPlayer 2.x pipeline used by OTT-play EXO2.
-        player = new ExoPlayer.Builder(this).build();
+        // Exo2-mod style experiment: prefer software FFmpeg for audio (MP2, AC3,
+        // EAC3, etc.) while keeping the Android hardware video decoder.
+        // The extension's audio renderer is discovered reflectively from the AAR.
+        DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                .setEnableDecoderFallback(true);
+        player = new ExoPlayer.Builder(this, renderers).build();
         player.setAudioAttributes(com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
@@ -82,6 +92,20 @@ public class MainActivity extends Activity {
                 videoWidth = size.width;
                 videoHeight = size.height;
                 notifyPage("size", "", videoWidth, videoHeight);
+            }
+            @Override public void onTracksChanged(@NonNull Tracks tracks) {
+                for (int groupIndex = 0; groupIndex < tracks.getGroups().size(); groupIndex++) {
+                    Tracks.Group group = tracks.getGroups().get(groupIndex);
+                    if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+                    for (int trackIndex = 0; trackIndex < group.length; trackIndex++) {
+                        if (!group.isTrackSelected(trackIndex)) continue;
+                        Format fmt = group.getTrackFormat(trackIndex);
+                        Log.i(TAG, "EXO2 audio format: " + fmt.sampleMimeType
+                                + " codecs=" + fmt.codecs
+                                + " channels=" + fmt.channelCount
+                                + " supported=" + group.isTrackSupported(trackIndex));
+                    }
+                }
             }
             @Override public void onPlayerError(@NonNull PlaybackException error) {
                 Log.e(TAG, "Legacy ExoPlayer2 playback failed", error);
