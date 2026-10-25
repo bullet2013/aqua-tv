@@ -1462,8 +1462,27 @@ function wireEvents() {
 
   // Android touch gestures: swipe right from the channel area to open the category overlay.
   if (AQUA_NATIVE) {
+    let suppressFullscreenTap = false;
+    let fullscreenTouchStart = null;
+    el('fullscreenStage').addEventListener('touchstart', event => {
+      if (event.touches.length !== 1) return;
+      const t = event.touches[0];
+      fullscreenTouchStart = {x:t.clientX, y:t.clientY, at:Date.now()};
+    }, {passive:true});
+    el('fullscreenStage').addEventListener('touchend', event => {
+      if (!fullscreenTouchStart || event.changedTouches.length !== 1) return;
+      const p = fullscreenTouchStart; fullscreenTouchStart = null;
+      const t = event.changedTouches[0];
+      const dx = t.clientX - p.x, dy = t.clientY - p.y;
+      if (dx > 75 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - p.at < 850) {
+        suppressFullscreenTap = true;
+        setGuide(true);
+        openCategoryMenu();
+        setTimeout(() => { suppressFullscreenTap = false; }, 500);
+      }
+    }, {passive:true});
     el('fullscreenStage').addEventListener('click', event => {
-      if (state.guideOpen || state.settingsOpen) return;
+      if (suppressFullscreenTap || state.guideOpen || state.settingsOpen) return;
       if (event.target.closest('button,a,input')) return;
       setGuide(true);
     });
