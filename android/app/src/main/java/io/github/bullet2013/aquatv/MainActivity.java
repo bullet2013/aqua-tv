@@ -3,10 +3,14 @@ package io.github.bullet2013.aquatv;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -18,13 +22,18 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
-import androidx.media3.common.VideoSize;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.ui.PlayerView;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.PlaybackException;
+import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.video.VideoSize;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.DefaultLoadControl;
+import com.google.android.exoplayer2.DefaultRenderersFactory;
+import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Tracks;
+import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.ui.PlayerView;
 import androidx.webkit.JavaScriptReplyProxy;
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
@@ -45,10 +54,22 @@ public class MainActivity extends Activity {
 
     private FrameLayout root;
     private PlayerView playerView;
+    private FrameLayout videoLayer;
+    // Always cover the old video surface until the new stream renders a frame.
+    // This mask is below WebView and is positioned over preview or fullscreen.
+    private View channelChangeMask;
     private WebView webView;
     private ExoPlayer player;
     private int videoWidth = 0;
     private int videoHeight = 0;
+    private long switchStartMs = 0;
+    private int switchNumber = 0;
+    // Each channel owns its own ExoPlayer and TextureView. ExoPlayer does not
+    // render frames from an older MediaItem onto the replacement video surface.
+    // Audio is unmuted only after this session's first video frame.
+    private boolean userMuted = false;
+    private boolean firstFrameShown = false;
+    private boolean decoderFirstFrame = false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -63,29 +84,17 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
-        // TextureView supports proper compositing below a transparent WebView.
-        playerView = (PlayerView) LayoutInflater.from(this).inflate(R.layout.native_player, root, false);
-        playerView.setUseController(false);
-        playerView.setShutterBackgroundColor(Color.BLACK);
-        root.addView(playerView, new FrameLayout.LayoutParams(
+        // The HTML layout determines preview/fullscreen bounds. A disposable
+        // PlayerView is installed inside this layer for EVERY new channel.
+        // Keeping the old texture around caused previous-channel ghost frames.
+        videoLayer = new FrameLayout(this);
+        root.addView(videoLayer, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-        player.addListener(new Player.Listener() {
-            @Override public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_READY) notifyPage("playing", "", videoWidth, videoHeight);
-                else if (state == Player.STATE_BUFFERING) notifyPage("buffering", "", videoWidth, videoHeight);
-            }
-            @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
-                videoWidth = size.width;
-                videoHeight = size.height;
-                notifyPage("size", "", videoWidth, videoHeight);
-            }
-            @Override public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "Media3 playback failed", error);
-                notifyPage("error", error.getErrorCodeName(), 0, 0);
-            }
-        });
+        channelChangeMask = new View(this);
+        channelChangeMask.setBackgroundColor(Color.BLACK);
+        channelChangeMask.setVisibility(View.INVISIBLE);
+        root.addView(channelChangeMask, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.TRANSPARENT);
@@ -138,10 +147,18 @@ public class MainActivity extends Activity {
             switch (obj.optString("type", "")) {
                 case "play": playStream(obj.optString("url", "")); break;
                 case "rect": positionVideo(obj); break;
-                case "mute": player.setVolume(obj.optBoolean("muted", false) ? 0f : 1f); break;
+                case "mute":
+                    userMuted = obj.optBoolean("muted", false);
+                    if (player != null)
+                        player.setVolume((userMuted || !firstFrameShown) ? 0f : 1f);
+                    break;
                 default: break;
             }
         } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
+    }
+
+    private long elapsedSwitchMs() {
+        return switchStartMs == 0 ? -1 : SystemClock.elapsedRealtime() - switchStartMs;
     }
 
     private void playStream(String address) {
@@ -154,22 +171,230 @@ public class MainActivity extends Activity {
                 notifyPage("error", "Не разрешён сервер канала: " + host, 0, 0);
                 return;
             }
+
+            // Invalidate ALL callbacks from the previous playback session.
+            // A frame belonging to channel A must never unlock channel B.
+            final int session = ++switchNumber;
+            switchStartMs = SystemClock.elapsedRealtime();
+            firstFrameShown = false;
+            decoderFirstFrame = false;
             videoWidth = videoHeight = 0;
+            channelChangeMask.setVisibility(View.VISIBLE);
+            // Keep the TextureView rendering so its real frame-update events
+            // arrive; the opaque sibling mask hides all green decoder output.
+            videoLayer.setAlpha(1f);
+            Log.i(TAG, "Switch #" + session + " start; new decoder and surface");
+            notifyPage("engine", "Android ExoPlayer 2 + FFmpeg Audio", 0, 0);
+
+            // Fully detach the previous TextureView before preparing the next.
+            // MediaItem replacement on a reused surface leaves the last frame
+            // there and produces the exact ghost-frame bug reported on Android.
+            ExoPlayer old = player;
+            player = null;
+            if (playerView != null) {
+                playerView.setPlayer(null);
+                videoLayer.removeView(playerView);
+                playerView = null;
+            }
+            if (old != null) {
+                old.stop();
+                old.release();
+            }
+
+            PlayerView nextView = (PlayerView) LayoutInflater.from(this)
+                    .inflate(R.layout.native_player, videoLayer, false);
+            nextView.setUseController(false);
+            nextView.setShutterBackgroundColor(Color.BLACK);
+            nextView.setKeepContentOnPlayerReset(false);
+            videoLayer.addView(nextView, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Keep the FFmpeg audio extension. Reusing only the factories does
+            // not share the old decoded output or a stale playback timeline.
+            DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                    .setEnableDecoderFallback(true);
+            DefaultLoadControl quickZapping = new DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(3000, 12000, 300, 1500)
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build();
+            final ExoPlayer next = new ExoPlayer.Builder(this, renderers)
+                    .setLoadControl(quickZapping)
+                    .build();
+            player = next;
+            playerView = nextView;
+            next.setAudioAttributes(
+                    com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
+            next.setVolume(0f);
+            nextView.setPlayer(next);
+            // ExoPlayer owns the TextureView's SurfaceTextureListener. Wrap
+            // that listener rather than replacing its lifecycle callbacks.
+            // A decoded first frame can still be green until a H264 keyframe.
+            final View surfaceView = nextView.getVideoSurfaceView();
+            final TextureView texture = surfaceView instanceof TextureView
+                    ? (TextureView) surfaceView : null;
+            if (texture != null) installValidFrameObserver(texture, next, session);
+            next.addListener(new Player.Listener() {
+                private boolean isCurrent() {
+                    return switchNumber == session && player == next;
+                }
+                @Override public void onPlaybackStateChanged(int state) {
+                    if (!isCurrent()) return;
+                    if (state == Player.STATE_READY) {
+                        Log.i(TAG, "Switch #" + session + " READY after "
+                                + elapsedSwitchMs() + "ms");
+                    } else if (state == Player.STATE_BUFFERING) {
+                        Log.d(TAG, "Switch #" + session + " buffering after "
+                                + elapsedSwitchMs() + "ms");
+                        notifyPage("buffering", "", videoWidth, videoHeight);
+                    }
+                }
+                @Override public void onRenderedFirstFrame() {
+                    if (!isCurrent() || firstFrameShown) return;
+                    decoderFirstFrame = true;
+                    Log.i(TAG, "Switch #" + session + " FIRST DECODED FRAME after "
+                            + elapsedSwitchMs() + "ms (may still be green)");
+                    // Do not unmask or unmute on this callback. A TextureView
+                    // frame inspection will signal real visual readiness.
+                    if (texture != null) inspectFrame(texture, next, session);
+                }
+                @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
+                    if (!isCurrent()) return;
+                    videoWidth = size.width;
+                    videoHeight = size.height;
+                    notifyPage("size", "", videoWidth, videoHeight);
+                }
+                @Override public void onTracksChanged(@NonNull Tracks tracks) {
+                    if (!isCurrent()) return;
+                    for (int i = 0; i < tracks.getGroups().size(); i++) {
+                        Tracks.Group group = tracks.getGroups().get(i);
+                        if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+                        for (int j = 0; j < group.length; j++) {
+                            if (!group.isTrackSelected(j)) continue;
+                            Format format = group.getTrackFormat(j);
+                            Log.i(TAG, "Switch #" + session + " AUDIO "
+                                    + format.sampleMimeType + " / " + format.codecs);
+                            notifyPage("audio", format.sampleMimeType == null
+                                    ? "Не определён" : format.sampleMimeType, 0, 0);
+                        }
+                    }
+                }
+                @Override public void onPlayerError(@NonNull PlaybackException error) {
+                    if (!isCurrent()) return;
+                    Log.e(TAG, "EXO2/FFmpeg playback failed on #" + session, error);
+                    notifyPage("error", error.getErrorCodeName(), 0, 0);
+                }
+            });
+
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                item.setLiveConfiguration(new MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(3000L)
+                        .setMinPlaybackSpeed(1.0f)
+                        .setMaxPlaybackSpeed(1.03f)
+                        .build());
             }
-            player.setMediaItem(item.build());
-            player.prepare();
-            player.play();
+            next.setMediaItem(item.build());
+            next.prepare();
+            next.play();
         } catch (Exception exception) {
+            Log.e(TAG, "Cannot start IPTV stream", exception);
             notifyPage("error", "Поток: " + exception.getMessage(), 0, 0);
         }
     }
 
+    /**
+     * Detect the specific green/black placeholders emitted by some hardware
+     * H264 decoders until a usable IDR frame is available.  There is NO time
+     * delay: inspect each newly composited frame from Android's TextureView.
+     * ExoPlayer2 still owns the underlying SurfaceTexture lifecycle.
+     */
+    private void installValidFrameObserver(TextureView texture,
+            ExoPlayer expected, int session) {
+        final TextureView.SurfaceTextureListener delegate =
+                texture.getSurfaceTextureListener();
+        texture.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override public void onSurfaceTextureAvailable(
+                    SurfaceTexture surface, int width, int height) {
+                if (delegate != null)
+                    delegate.onSurfaceTextureAvailable(surface, width, height);
+            }
+            @Override public void onSurfaceTextureSizeChanged(
+                    SurfaceTexture surface, int width, int height) {
+                if (delegate != null)
+                    delegate.onSurfaceTextureSizeChanged(surface, width, height);
+            }
+            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+                return delegate == null || delegate.onSurfaceTextureDestroyed(surface);
+            }
+            @Override public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+                if (delegate != null) delegate.onSurfaceTextureUpdated(surface);
+                if (session == switchNumber && player == expected &&
+                        decoderFirstFrame && !firstFrameShown) {
+                    inspectFrame(texture, expected, session);
+                }
+            }
+        });
+    }
+
+    private void inspectFrame(TextureView texture, ExoPlayer expected, int session) {
+        if (session != switchNumber || player != expected ||
+                !decoderFirstFrame || firstFrameShown || !texture.isAvailable()) return;
+        Bitmap sample = null;
+        try {
+            // Sampling at 32x18 keeps GPU readback small; this only runs until
+            // the first useful frame, not during normal channel playback.
+            sample = texture.getBitmap(32, 18);
+            if (sample == null || isDecoderPlaceholder(sample)) return;
+        } catch (RuntimeException exception) {
+            Log.w(TAG, "Video texture snapshot not ready", exception);
+            return;
+        } finally {
+            if (sample != null) sample.recycle();
+        }
+
+        // We have a non-green/non-blank frame from THIS playback session.
+        firstFrameShown = true;
+        long readyMs = elapsedSwitchMs();
+        Log.i(TAG, "Switch #" + session + " FIRST VALID PICTURE after "
+                + readyMs + "ms (green frames filtered)");
+        channelChangeMask.setVisibility(View.INVISIBLE);
+        expected.setVolume(userMuted ? 0f : 1f);
+        notifyPage("firstFrame", readyMs + " мс (без зелёного кадра)", 0, 0);
+        notifyPage("playing", "", videoWidth, videoHeight);
+    }
+
+    private boolean isDecoderPlaceholder(Bitmap bitmap) {
+        int total = bitmap.getWidth() * bitmap.getHeight();
+        int green = 0;
+        int dark = 0;
+        int visible = 0;
+        for (int y = 0; y < bitmap.getHeight(); y++) {
+            for (int x = 0; x < bitmap.getWidth(); x++) {
+                int argb = bitmap.getPixel(x, y);
+                int red = Color.red(argb);
+                int g = Color.green(argb);
+                int blue = Color.blue(argb);
+                if (red < 18 && g < 18 && blue < 18) { dark++; continue; }
+                visible++;
+                if (g > 48 && g > red + 24 && g > blue + 20 &&
+                        g * 10 > red * 14 && g * 10 > blue * 14) green++;
+            }
+        }
+        // Account for black side-bars around a green SD placeholder. Genuine
+        // scenes with varied colours must not be treated as decoder failure.
+        boolean almostBlack = dark >= total * 0.95f;
+        boolean mostlyGreen = visible >= total * 0.35f &&
+                green >= visible * 0.84f;
+        return almostBlack || mostlyGreen;
+    }
+
     private void positionVideo(JSONObject rect) {
         if (!rect.optBoolean("visible", true)) {
-            playerView.setVisibility(View.INVISIBLE);
+            videoLayer.setVisibility(View.INVISIBLE);
+            channelChangeMask.setVisibility(View.INVISIBLE);
             return;
         }
         double viewportWidth = rect.optDouble("viewportWidth", 0);
@@ -185,8 +410,14 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(w, h);
         params.leftMargin = x;
         params.topMargin = y;
-        playerView.setLayoutParams(params);
-        playerView.setVisibility(View.VISIBLE);
+        videoLayer.setLayoutParams(params);
+        // The opaque mask follows exactly the same WebView video rectangle.
+        FrameLayout.LayoutParams maskParams = new FrameLayout.LayoutParams(w, h);
+        maskParams.leftMargin = x;
+        maskParams.topMargin = y;
+        channelChangeMask.setLayoutParams(maskParams);
+        channelChangeMask.setVisibility(firstFrameShown ? View.INVISIBLE : View.VISIBLE);
+        videoLayer.setVisibility(View.VISIBLE);
     }
 
     private void notifyPage(String status, String message, int width, int height) {
@@ -226,6 +457,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (playerView != null) playerView.setPlayer(null);
         if (player != null) player.release();
+        if (videoLayer != null) videoLayer.removeAllViews();
         if (webView != null) { root.removeView(webView); webView.destroy(); }
         super.onDestroy();
     }

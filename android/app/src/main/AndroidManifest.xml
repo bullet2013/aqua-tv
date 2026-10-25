@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-  <application android:label="AQUA TV" android:theme="@android:style/Theme.Material.Light.NoActionBar"
+  <application android:label="AQUA TV EXO2 TEST" android:theme="@android:style/Theme.Material.Light.NoActionBar"
     android:usesCleartextTraffic="true" android:hardwareAccelerated="true"
     android:icon="@android:drawable/ic_media_play"
     android:allowBackup="false">
