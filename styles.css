@@ -843,3 +843,89 @@ html.aqua-native-android .right-panel::before {
   border-radius:18px;background:rgba(245,252,255,.93);
   clip-path:var(--native-right-hole,none);pointer-events:none
 }
+
+/* AQUA TV Android WebView: keep the TV guide side by side in landscape.
+   A TV box or handset may report only 430–850 CSS pixels despite a wide
+   physical display. The web/mobile breakpoint would otherwise stack the
+   preview below the channels and make the native video rectangle jump. */
+html.aqua-native-android body,
+html.aqua-native-android .guide-view {
+  overflow: hidden;
+}
+html.aqua-native-android .guide-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 57fr) minmax(0, 43fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(5px, 1vw, 14px);
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: clamp(5px, 1vw, 12px);
+}
+html.aqua-native-android .channels-panel {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  min-width: 0;
+  height: auto;
+  max-height: 100%;
+  align-self: stretch;
+}
+html.aqua-native-android .right-panel {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  min-width: 0;
+  height: auto;
+  max-height: 100%;
+  align-self: stretch;
+  margin: 0;
+  overflow: hidden;
+}
+html.aqua-native-android .preview-slot,
+html.aqua-native-android .preview-meta { flex: 0 0 auto; }
+html.aqua-native-android .program-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+/* Maintain the slide-out category menu on top of the left column, not
+   fixed to the phone viewport as the ordinary mobile website does. */
+html.aqua-native-android .categories-panel {
+  position: absolute !important;
+  z-index: 31;
+  top: clamp(5px, 1vw, 12px);
+  bottom: clamp(5px, 1vw, 12px);
+  left: clamp(5px, 1vw, 12px);
+  width: min(290px, 86%);
+  height: auto;
+  min-height: 0;
+}
+html.aqua-native-android .menu-backdrop {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58%;
+  height: auto;
+}
+/* Small WebView layout widths must leave room for the programme text even
+   when the longest channel title is wider than the entire left column. */
+html.aqua-native-android .channel-row {
+  grid-template-columns: minmax(0, min(var(--channel-col-width, 140px), 43%)) minmax(0, 1fr);
+}
+html.aqua-native-android .channel-list,
+html.aqua-native-android .row-right {overflow-x: hidden;}
+@media (max-width: 650px) {
+  html.aqua-native-android .guide-layout {
+    grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+    gap: 5px;
+    padding: 5px;
+  }
+  html.aqua-native-android .right-panel {padding: 5px;}
+  html.aqua-native-android .preview-slot {border-width: 2px; border-radius: 8px;}
+  html.aqua-native-android .playing-now-box {margin-top: 5px; padding: 6px;}
+  html.aqua-native-android .channel-row {gap: 2px; padding-inline: 3px;}
+  html.aqua-native-android .row-bar {flex-basis: 25px; width: 25px; max-width: 25px;}
+  html.aqua-native-android .row-logo {max-width: 24px; max-height: 24px;}
+}
