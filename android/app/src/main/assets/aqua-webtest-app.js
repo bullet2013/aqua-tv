@@ -509,14 +509,11 @@ function tryPlay(initial = false) {
   if (!attempt?.catch) return;
   attempt.catch(async err => {
     if (err.name === 'AbortError') return; // another channel was chosen
-    if (!video.muted) {
-      video.muted = true;
-      syncMuteButton();
-      try { await video.play(); toast('Браузер ограничил автозапуск со звуком. Включите звук кнопкой ♫.'); return; }
-      catch (_) { /* user interaction required */ }
-    }
+    // In this Android WebView experiment do not quietly fall back to muted
+    // autoplay. If sound playback needs interaction, ask for a tap explicitly.
+    console.warn('AQUA WEB TEST: playback with sound was blocked', err.name, err.message);
     el('centerPlay').hidden = false;
-    if (initial) playStatus('Нажмите ▶ для начала просмотра');
+    if (initial) playStatus('Нажмите ▶ для просмотра со звуком');
   });
 }
 // Native Safari HLS can support formats that MediaSource/hls.js cannot.
@@ -1678,9 +1675,11 @@ async function boot() {
     const lastUrl = localStorage.getItem('aqua:lastChannelUrl');
     const last = state.channels.find(c => c.id === lastId) || state.channels.find(c => c.url === lastUrl);
     const channel = last || state.channels[0];
-    // Native Android playback may start with sound; browser remains muted to
-    // satisfy browser autoplay rules on ordinary HTTPS websites.
-    video.muted = !AQUA_NATIVE;
+    // Android WEB TEST has no AquaAndroid native bridge by design, but
+    // WebSettings.setMediaPlaybackRequiresUserGesture(false) allows playback
+    // with sound. Do NOT inherit the ordinary website's muted autoplay.
+    video.defaultMuted = false;
+    video.muted = false;
     syncMuteButton();
     playChannel(channel, true);
     el('startup').hidden = true;
