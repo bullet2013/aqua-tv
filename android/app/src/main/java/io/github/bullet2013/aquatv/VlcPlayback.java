@@ -30,6 +30,11 @@ final class VlcPlayback {
     private boolean muted;
     private boolean active;
     private boolean failed;
+    private int windowW;
+    private int windowH;
+    private int generation;
+    private int reportedW;
+    private int reportedH;
 
     VlcPlayback(Context context, TextureView video, Listener listener) {
         this.video = video;
@@ -43,7 +48,13 @@ final class VlcPlayback {
             player.setEventListener(event -> {
                 switch (event.type) {
                     case MediaPlayer.Event.Playing:
-                        video.post(() -> { if (active) listener.playing(); });
+                        video.post(() -> {
+                            if (!active) return;
+                            // OpenGL owns layout, size must come from decoded media track.
+                            refreshLayout();
+                            listener.playing();
+                            readResolution(generation);
+                        });
                         break;
                     case MediaPlayer.Event.EncounteredError:
                         video.post(() -> {
@@ -59,10 +70,12 @@ final class VlcPlayback {
                 }
             });
             player.getVLCVout().setVideoView(video);
-            player.getVLCVout().attachViews((vout, w, h, visibleW, visibleH, sarNum, sarDen) -> {
-                if (w > 0 && h > 0) video.post(() -> {
-                    if (active) listener.size(w, h);
-                });
+            // Do NOT pass a layout callback without resizing the native video
+            // buffer ourselves: android-display will then show SD in a tiny
+            // corner. Without a callback LibVLC uses OpenGL fit-to-window.
+            player.getVLCVout().attachViews();
+            video.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
+                if (r - l != orr - ol || b - t != ob - ot) resize(r - l, b - t);
             });
         } catch (Throwable e) {
             Log.e(TAG, "LibVLC unavailable, keep Media3 fallback", e);
@@ -77,6 +90,8 @@ final class VlcPlayback {
     void play(Uri uri) {
         if (!available()) throw new IllegalStateException("LibVLC not available");
         player.stop();
+        generation++;
+        reportedW = reportedH = 0;
         active = true;
         video.setVisibility(View.VISIBLE);
         Media media = new Media(library, uri);
@@ -88,6 +103,50 @@ final class VlcPlayback {
         }
         player.setVolume(muted ? 0 : 100);
         player.play();
+        refreshLayout();
+        readResolution(generation);
+    }
+
+    /** Dimensions in Android physical pixels, not the source video size. */
+    void resize(int width, int height) {
+        if (width <= 0 || height <= 0 || player == null) return;
+        if (windowW == width && windowH == height) return;
+        windowW = width;
+        windowH = height;
+        refreshLayout();
+    }
+
+    /** Fit the decoded frame inside fullscreen or preview, preserving SAR. */
+    private void refreshLayout() {
+        if (player == null || !active || windowW <= 0 || windowH <= 0) return;
+        try {
+            player.getVLCVout().setWindowSize(windowW, windowH);
+            player.setAspectRatio(null);
+            player.setScale(0f);
+        } catch (RuntimeException ex) {
+            Log.w(TAG, "Unable to resize VLC video window", ex);
+        }
+    }
+
+    /** LibVLC vout layout is not guaranteed to return source resolution.
+     * Obtain it from the selected decoded video track when playback starts. */
+    private void readResolution(int expectedGeneration) {
+        if (player == null || !active || expectedGeneration != generation) return;
+        try {
+            var track = player.getCurrentVideoTrack();
+            if (track != null && track.width > 0 && track.height > 0) {
+                if (track.width != reportedW || track.height != reportedH) {
+                    reportedW = track.width;
+                    reportedH = track.height;
+                    listener.size(reportedW, reportedH);
+                }
+                return;
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Cannot query current video track yet", e);
+        }
+        // MPEG TS / HLS tracks can appear after MediaPlayer.Event.Playing.
+        video.postDelayed(() -> readResolution(expectedGeneration), 800);
     }
 
     void mute(boolean value) {
@@ -103,6 +162,7 @@ final class VlcPlayback {
     }
     void stop() {
         active = false;
+        generation++;
         if (player != null) player.stop();
         video.setVisibility(View.INVISIBLE);
     }
