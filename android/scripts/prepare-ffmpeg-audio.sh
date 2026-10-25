@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the official Media3 1.11.1 audio extension and a small ARM64 FFmpeg.
+# Build the official Media3 1.11.1 audio extension and a small ARMv7 (32-bit) FFmpeg.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,7 +12,7 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 if [[ -z "$SDK" ]]; then echo "ANDROID_HOME or ANDROID_SDK_ROOT must be set" >&2; exit 1; fi
 NDK="${ANDROID_NDK_HOME:-${SDK}/ndk/${NDK_VERSION}}"
 TOOLCHAIN="${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin"
-if [[ ! -x "${TOOLCHAIN}/aarch64-linux-android23-clang" ]]; then
+if [[ ! -x "${TOOLCHAIN}/armv7a-linux-androideabi23-clang" ]]; then
   echo "Android NDK r26b not installed: ${NDK}" >&2; exit 1
 fi
 mkdir -p "$JAVA" "$JNIDIR"
@@ -32,18 +32,18 @@ if [[ ! -d "$FFSRC/.git" ]]; then
 fi
 
 cd "$FFSRC"
-echo "Compiling FFmpeg 6.0 audio-only for arm64-v8a"
+echo "Compiling FFmpeg 6.0 audio-only for armeabi-v7a"
 ./configure \
   --target-os=android \
-  --arch=aarch64 --cpu=armv8-a \
-  --cross-prefix="${TOOLCHAIN}/aarch64-linux-android-" \
-  --cc="${TOOLCHAIN}/aarch64-linux-android23-clang" \
-  --cxx="${TOOLCHAIN}/aarch64-linux-android23-clang++" \
+  --arch=arm --cpu=armv7-a \
+  --cross-prefix="${TOOLCHAIN}/arm-linux-androideabi-" \
+  --cc="${TOOLCHAIN}/armv7a-linux-androideabi23-clang" \
+  --cxx="${TOOLCHAIN}/armv7a-linux-androideabi23-clang++" \
   --nm="${TOOLCHAIN}/llvm-nm" \
   --ar="${TOOLCHAIN}/llvm-ar" \
   --ranlib="${TOOLCHAIN}/llvm-ranlib" \
   --strip="${TOOLCHAIN}/llvm-strip" \
-  --libdir="android-libs/arm64-v8a" \
+  --libdir="android-libs/armeabi-v7a" \
   --enable-cross-compile \
   --enable-static --disable-shared \
   --disable-doc --disable-programs --disable-everything \
@@ -52,11 +52,11 @@ echo "Compiling FFmpeg 6.0 audio-only for arm64-v8a"
   --disable-v4l2-m2m --disable-vulkan \
   --enable-swresample \
   --enable-decoder=ac3 --enable-decoder=eac3 --enable-decoder=mp3 \
-  --enable-small \
+  --enable-small --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
   --extra-ldexeflags=-pie
 make -j2
 make install-libs
 for lib in avutil avcodec swresample; do
-  test -f "android-libs/arm64-v8a/lib${lib}.a" || { echo "Missing lib${lib}.a" >&2; exit 1; }
+  test -f "android-libs/armeabi-v7a/lib${lib}.a" || { echo "Missing lib${lib}.a" >&2; exit 1; }
 done
 echo "Audio decoder libraries ready. Video decoders were not built."
