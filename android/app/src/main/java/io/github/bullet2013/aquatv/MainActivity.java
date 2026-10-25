@@ -18,13 +18,13 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
-import androidx.media3.common.PlaybackException;
-import androidx.media3.common.Player;
-import androidx.media3.common.VideoSize;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.ui.PlayerView;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.PlaybackException;
+import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.video.VideoSize;
+import com.google.android.exoplayer2.ExoPlayer;
+import com.google.android.exoplayer2.ui.PlayerView;
 import androidx.webkit.JavaScriptReplyProxy;
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
@@ -69,7 +69,9 @@ public class MainActivity extends Activity {
         playerView.setShutterBackgroundColor(Color.BLACK);
         root.addView(playerView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Test the original Google ExoPlayer 2.x pipeline used by OTT-play EXO2.
         player = new ExoPlayer.Builder(this).build();
+        player.setAudioAttributes(com.google.android.exoplayer2.audio.AudioAttributes.DEFAULT, true);
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int state) {
@@ -82,7 +84,7 @@ public class MainActivity extends Activity {
                 notifyPage("size", "", videoWidth, videoHeight);
             }
             @Override public void onPlayerError(@NonNull PlaybackException error) {
-                Log.e(TAG, "Media3 playback failed", error);
+                Log.e(TAG, "Legacy ExoPlayer2 playback failed", error);
                 notifyPage("error", error.getErrorCodeName(), 0, 0);
             }
         });
