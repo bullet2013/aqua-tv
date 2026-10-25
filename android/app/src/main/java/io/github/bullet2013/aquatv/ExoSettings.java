@@ -23,6 +23,7 @@ import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
+import androidx.media3.decoder.ffmpeg.FfmpegLibrary;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
@@ -95,9 +96,9 @@ final class ExoSettings {
                 .setDataSourceFactory(new DefaultDataSource.Factory(context, http))
                 .setLoadErrorHandlingPolicy(new DefaultLoadErrorHandlingPolicy(number("retries", 3)));
         builder.setMediaSourceFactory(sourceFactory);
-        if (enabled("decoderFallback", false)) {
-            builder.setRenderersFactory(new DefaultRenderersFactory(context).setEnableDecoderFallback(true));
-        }
+        builder.setRenderersFactory(new DefaultRenderersFactory(context)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                .setEnableDecoderFallback(true));
 
         DefaultTrackSelector tracks = new DefaultTrackSelector(context);
         DefaultTrackSelector.Parameters.Builder trackParams = tracks.buildUponParameters();
