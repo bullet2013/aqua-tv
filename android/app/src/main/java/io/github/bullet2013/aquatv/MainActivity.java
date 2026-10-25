@@ -48,6 +48,24 @@ public class MainActivity extends Activity {
     private static final String ORIGIN = "https://bullet2013.github.io";
     private static final Set<String> ALLOWED_STREAM_HOSTS = Collections.singleton("31.41.12.104");
 
+    private static final String EXO_SETTINGS_ENTRY_SCRIPT =
+            "(function(){" +
+            "var card=document.querySelector('#fontSettings .font-settings-card');" +
+            "if(!card||document.getElementById('openExoSettings'))return;" +
+            "var block=document.createElement('div');block.id='androidExoSettings';" +
+            "block.style.cssText='margin-top:16px;padding:16px 0;border-top:1px solid #b7dff6';" +
+            "var title=document.createElement('h3');title.textContent='Видеоплеер Android';" +
+            "title.style.cssText='margin:0 0 8px;color:#176b9e';block.appendChild(title);" +
+            "var btn=document.createElement('button');btn.id='openExoSettings';" +
+            "btn.type='button';btn.textContent='⚙ Расширенные настройки ExoPlayer';" +
+            "btn.style.cssText='width:100%;min-height:46px;border:1px solid #6bbde7;" +
+            "background:#d0edff;border-radius:11px;color:#115b86;font-weight:700';" +
+            "btn.onclick=function(){if(window.AquaAndroid)window.AquaAndroid.postMessage(" +
+            "JSON.stringify({type:'exoSettings'}));};block.appendChild(btn);" +
+            "var bottom=card.querySelector('.settings-bottom');" +
+            "if(bottom)card.insertBefore(block,bottom);else card.appendChild(block);" +
+            "})();";
+
     private FrameLayout root;
     private PlayerView playerView;
     private WebView webView;
@@ -93,6 +111,14 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // The UI is loaded from GitHub Pages, which may lag behind an APK update.
+                // Add the settings entry natively to the existing settings dialog if missing.
+                if (url != null && url.startsWith(SITE)) {
+                    view.evaluateJavascript(EXO_SETTINGS_ENTRY_SCRIPT, null);
+                }
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
