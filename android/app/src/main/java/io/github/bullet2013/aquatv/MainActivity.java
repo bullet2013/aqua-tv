@@ -31,10 +31,6 @@ import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Tracks;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.ui.PlayerView;
-import com.google.android.exoplayer2.source.hls.HlsMediaSource;
-import com.google.android.exoplayer2.source.hls.DefaultHlsExtractorFactory;
-import com.google.android.exoplayer2.extractor.ts.DefaultTsPayloadReaderFactory;
-import com.google.android.exoplayer2.upstream.DefaultDataSource;
 import androidx.webkit.JavaScriptReplyProxy;
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
@@ -210,10 +206,7 @@ public class MainActivity extends Activity {
             // not share the old decoded output or a stale playback timeline.
             DefaultRenderersFactory renderers = new DefaultRenderersFactory(this)
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-                    .setEnableDecoderFallback(true)
-                    // Do not let the video renderer report ready by "joining"
-                    // audio for up to 5s before there is a decoded picture.
-                    .setAllowedVideoJoiningTimeMs(0);
+                    .setEnableDecoderFallback(true);
             DefaultLoadControl quickZapping = new DefaultLoadControl.Builder()
                     .setBufferDurationsMs(3000, 12000, 300, 1500)
                     .setPrioritizeTimeOverSizeThresholds(true)
@@ -283,26 +276,13 @@ public class MainActivity extends Activity {
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
-                // hls.js (the successful localhost player) demuxes MPEG-TS
-                // H.264 access units by scanning NAL slice headers. ExoPlayer
-                // by default expects AUD markers, absent from some IPTV TS.
-                // Detect them explicitly so we don't wait for a later segment.
-                //
-                // Do NOT enable FLAG_ALLOW_NON_IDR_KEYFRAMES: ExoPlayer docs
-                // warn it can display corrupt/green frames on startup.
-                HlsMediaSource.Factory hls = new HlsMediaSource.Factory(
-                        new DefaultDataSource.Factory(this))
-                        .setExtractorFactory(new DefaultHlsExtractorFactory(
-                                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
-                                true))
-                        .setAllowChunklessPreparation(true);
-                // Restore standard playlist-defined live position instead of
-                // forcing 3000ms from the live edge, which may be inside an
-                // incomplete video GOP. This tracks hls.js's segment logic.
-                next.setMediaSource(hls.createMediaSource(item.build()));
-            } else {
-                next.setMediaItem(item.build());
+                item.setLiveConfiguration(new MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(3000L)
+                        .setMinPlaybackSpeed(1.0f)
+                        .setMaxPlaybackSpeed(1.03f)
+                        .build());
             }
+            next.setMediaItem(item.build());
             next.prepare();
             next.play();
         } catch (Exception exception) {
