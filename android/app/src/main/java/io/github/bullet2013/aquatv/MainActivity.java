@@ -3,6 +3,7 @@ package io.github.bullet2013.aquatv;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -16,6 +17,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -49,6 +51,13 @@ public class MainActivity extends Activity {
     private WebView webView;
     private ExoPlayer player;
     private TextureView vlcView;
+    // Hold the last correctly proportioned frame while LibVLC handles a resize.
+    private ImageView resizeCover;
+    private int resizeSequence = 0;
+    private int videoRectX = Integer.MIN_VALUE;
+    private int videoRectY = Integer.MIN_VALUE;
+    private int videoRectW = 0;
+    private int videoRectH = 0;
     private VlcPlayback vlc;
     private String lastStream = "";
     private boolean muted = false;
@@ -78,6 +87,11 @@ public class MainActivity extends Activity {
         vlcView = new TextureView(this);
         vlcView.setVisibility(View.INVISIBLE);
         root.addView(vlcView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        resizeCover = new ImageView(this);
+        resizeCover.setBackgroundColor(Color.BLACK);
+        resizeCover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        resizeCover.setVisibility(View.INVISIBLE);
+        root.addView(resizeCover, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
         player.addListener(new Player.Listener() {
@@ -191,6 +205,10 @@ public class MainActivity extends Activity {
     private void playMedia3(Uri uri) {
         try {
             if (vlc != null) vlc.stop();
+            resizeSequence++;
+            vlcView.setAlpha(1f);
+            resizeCover.setVisibility(View.INVISIBLE);
+            resizeCover.setImageDrawable(null);
             playerView.setVisibility(View.VISIBLE);
             notifyPage("engine", "Android Media3 / ExoPlayer", 0, 0);
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
@@ -210,6 +228,8 @@ public class MainActivity extends Activity {
         if (!rect.optBoolean("visible", true)) {
             playerView.setVisibility(View.INVISIBLE);
             if (vlcView != null) vlcView.setVisibility(View.INVISIBLE);
+            if (resizeCover != null) resizeCover.setVisibility(View.INVISIBLE);
+            resizeSequence++;
             return;
         }
         double viewportWidth = rect.optDouble("viewportWidth", 0);
@@ -222,20 +242,78 @@ public class MainActivity extends Activity {
         int w = (int) Math.round(rect.optDouble("width", 0) * sx);
         int h = (int) Math.round(rect.optDouble("height", 0) * sy);
         if (w < 20 || h < 20) return;
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(w, h);
-        params.leftMargin = x;
-        params.topMargin = y;
-        playerView.setLayoutParams(params);
-        if (vlcView != null) {
-            FrameLayout.LayoutParams vlcParams = new FrameLayout.LayoutParams(w, h);
-            vlcParams.leftMargin = x; vlcParams.topMargin = y;
-            vlcView.setLayoutParams(vlcParams);
+
+        // The webpage reports the bounds regularly. Re-applying identical
+        // LayoutParams needlessly asks LibVLC to adjust its viewport again.
+        boolean changed = x != videoRectX || y != videoRectY ||
+                w != videoRectW || h != videoRectH;
+        if (!changed) {
+            if (vlc != null && vlc.isActive()) vlcView.setVisibility(View.VISIBLE);
+            else playerView.setVisibility(View.VISIBLE);
+            return;
         }
-        if (vlc != null && vlc.isActive()) {
-            vlcView.setVisibility(View.VISIBLE);
+        videoRectX = x;
+        videoRectY = y;
+        videoRectW = w;
+        videoRectH = h;
+        int sequence = ++resizeSequence;
+
+        boolean usingVlc = vlc != null && vlc.isActive();
+        Bitmap frozen = null;
+        if (usingVlc && vlcView.isAvailable() &&
+                vlcView.getWidth() > 0 && vlcView.getHeight() > 0) {
+            try {
+                // A small still frame makes the transition look immediate
+                // without loading a full-resolution screenshot into memory.
+                int bw = Math.min(640, vlcView.getWidth());
+                int bh = Math.max(1, (int) Math.round(
+                        (double) bw * vlcView.getHeight() / vlcView.getWidth()));
+                frozen = vlcView.getBitmap(bw, bh);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Cannot capture resize frame", e);
+            }
+        }
+
+        FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(w, h);
+        position.leftMargin = x;
+        position.topMargin = y;
+
+        if (usingVlc) {
+            // Hide the transient unscaled video while its output catches up.
+            vlcView.setAlpha(0f);
+            if (frozen != null) {
+                resizeCover.setImageBitmap(frozen);
+                resizeCover.setLayoutParams(new FrameLayout.LayoutParams(position));
+                resizeCover.setVisibility(View.VISIBLE);
+            } else {
+                resizeCover.setVisibility(View.INVISIBLE);
+                resizeCover.setImageDrawable(null);
+            }
+            // Tell the native engine the target size BEFORE Android re-lays
+            // out the TextureView. The cover remains aspect-preserved.
             vlc.resize(w, h);
+        } else {
+            resizeCover.setVisibility(View.INVISIBLE);
+            resizeCover.setImageDrawable(null);
+            vlcView.setAlpha(1f);
         }
-        else playerView.setVisibility(View.VISIBLE);
+        playerView.setLayoutParams(new FrameLayout.LayoutParams(position));
+        vlcView.setLayoutParams(new FrameLayout.LayoutParams(position));
+        if (usingVlc) {
+            playerView.setVisibility(View.INVISIBLE);
+            vlcView.setVisibility(View.VISIBLE);
+            // VLC applies its display fit asynchronously. Wait a few display
+            // frames before uncovering, never letting a stretched frame show.
+            vlcView.postDelayed(() -> {
+                if (resizeSequence != sequence) return;
+                vlcView.setAlpha(1f);
+                resizeCover.setVisibility(View.INVISIBLE);
+                resizeCover.setImageDrawable(null);
+            }, 180L);
+        } else {
+            vlcView.setVisibility(View.INVISIBLE);
+            playerView.setVisibility(View.VISIBLE);
+        }
     }
 
     private void notifyPage(String status, String message, int width, int height) {
@@ -276,6 +354,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if (vlc != null) vlc.release();
+        if (resizeCover != null) resizeCover.setImageDrawable(null);
         if (playerView != null) playerView.setPlayer(null);
         if (player != null) player.release();
         if (webView != null) { root.removeView(webView); webView.destroy(); }
