@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1b99db">
   <title>AQUA TV — IPTV-плеер</title>
-  <link rel="stylesheet" href="./styles.css?v=1.14.3-android-layout">
+  <link rel="stylesheet" href="./styles.css?v=1.14.5-exo-settings">
   <script src="./config.js?v=1.11" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js" defer></script>
-  <script src="./app.js?v=1.14.4-android-touch" defer></script>
+  <script src="./app.js?v=1.14.5-exo-settings" defer></script>
 </head>
 <body>
   <div id="fullscreenStage" class="fullscreen-stage">
@@ -94,7 +94,12 @@
         </div>
         <p id="fontPxHint" class="font-pixel-help">От 8 до 40 px. Настройка сохраняется для этого устройства.</p>
       </form>
-      <div class="settings-bottom"><span>Введите число и нажмите Enter · Esc — назад</span></div>
+      <div id="androidExoSettings" class="android-exo-settings" hidden>
+          <h3>Видеоплеер Android</h3>
+          <p>Буферизация, HTTP, декодеры, качество, звук и подробная диагностика.</p>
+          <button id="openExoSettings" type="button" class="font-apply-button">⚙ Расширенные настройки ExoPlayer</button>
+        </div>
+        <div class="settings-bottom"><span>Введите число и нажмите Enter · Esc — назад</span></div>
     </div>
   </section>
   <div id="startup" class="startup">

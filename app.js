@@ -61,6 +61,10 @@ if (AQUA_NATIVE) {
           : mime.includes('opus') ? 'Opus'
           : mime.includes('vorbis') ? 'Vorbis'
           : message || 'Не определён';
+      } else if (what === 'audioStatus') {
+        state.nativeAudioStatus=String(message || '—').slice(0,250);
+      } else if (what === 'audioDetail') {
+        state.nativeAudioTechnical=String(message || '—').slice(0,500);
       } else if (what === 'firstFrame') {
         state.nativeFirstFrameTime=String(message || '');
       }
@@ -89,7 +93,7 @@ const state = {
   guideOpen: false, hls: null, hlsErrorCount: 0, playing: false,
   failed: false, retryTimer: null, startupTimer: null, session: 0,
   playerMode: '—', videoCodec: 'Не определён', audioCodec: 'Не определён',
-  lastError: null, nativeFirstFrameTime: '', initialAutoplay: false, epgDetails: { status: 'Ожидание', error: '', source: '—', updatedAt: 0, lastAttemptAt: 0, matched: 0, programmes: 0, seenChannelIds: 0, earliest: null, latest: null, progress: '' }
+  lastError: null, nativeFirstFrameTime: '', nativeAudioStatus: 'Ожидаем дорожки…', nativeAudioTechnical: '', initialAutoplay: false, epgDetails: { status: 'Ожидание', error: '', source: '—', updatedAt: 0, lastAttemptAt: 0, matched: 0, programmes: 0, seenChannelIds: 0, earliest: null, latest: null, progress: '' }
 };
 
 function loadStorageJSON(key, fallback) {
@@ -582,12 +586,21 @@ function updateDiagnostics() {
   el('diagVideo').textContent = state.videoCodec;
   el('diagAudio').textContent = state.audioCodec;
   el('diagError').textContent = state.lastError?.message || (state.playing ? 'Нет ошибок' : 'Ожидаем видеопоток…');
-  el('diagTechnical').textContent = state.lastError?.technical ||
-    (AQUA_NATIVE && state.nativeFirstFrameTime ? `Первый видеокадр: ${state.nativeFirstFrameTime}` : '—');
+  el('diagTechnical').textContent = diagnosticTechnical();
   el('diagAdvice').textContent = diagAdvice();
   const alt = alternateChannel();
   el('tryAlternate').hidden = !alt;
   if (alt) el('tryAlternate').textContent = `Другой поток: ${alt.name}`;
+}
+function diagnosticTechnical() {
+  const details = [];
+  if (state.lastError?.technical) details.push(state.lastError.technical);
+  if (AQUA_NATIVE) {
+    details.push(`Состояние звука: ${state.nativeAudioStatus || '—'}`);
+    if (state.nativeAudioTechnical) details.push(state.nativeAudioTechnical);
+    if (state.nativeFirstFrameTime) details.push(`Первый видеокадр: ${state.nativeFirstFrameTime}`);
+  }
+  return details.join(' · ') || '—';
 }
 function playerReport() {
   return [
@@ -600,8 +613,7 @@ function playerReport() {
     `Видео: ${state.videoCodec}`,
     `Аудио: ${state.audioCodec}`,
     `Ошибка: ${state.lastError?.message || '—'}`,
-    `Технические данные: ${state.lastError?.technical ||
-      (AQUA_NATIVE && state.nativeFirstFrameTime ? `Первый видеокадр: ${state.nativeFirstFrameTime}` : '—')}`,
+    `Технические данные: ${diagnosticTechnical()}`,
     `Браузер: ${navigator.userAgent}`
   ].join('\n');
 }
@@ -663,6 +675,8 @@ function playChannel(channel, initial = false) {
   state.videoCodec = 'Не определён';
   state.audioCodec = 'Не определён';
   state.nativeFirstFrameTime = '';
+  state.nativeAudioStatus = 'Ожидаем дорожки…';
+  state.nativeAudioTechnical = '';
   state.lastError = null;
   state.initialAutoplay = initial;
   // Do not show stale dimensions from the previously playing stream.
@@ -1532,6 +1546,10 @@ function wireEvents() {
   el('favoriteButton').addEventListener('click', toggleFavorite);
   el('menuBackdrop').addEventListener('click', () => closeCategoryMenu());
   el('openSettings').addEventListener('click', () => { state.focusedGroup = SETTINGS_ITEM; openFontSettings(); });
+  if (AQUA_NATIVE) {
+    el('androidExoSettings').hidden = false;
+    el('openExoSettings').addEventListener('click', () => nativeSend({type:'exoSettings'}));
+  }
   el('closeFontSettings').addEventListener('click', closeFontSettings);
   el('fontSettingsBackdrop').addEventListener('click', closeFontSettings);
   el('fontSizeForm').addEventListener('submit', event => {
