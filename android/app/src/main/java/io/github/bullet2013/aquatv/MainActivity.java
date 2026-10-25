@@ -3,7 +3,6 @@ package io.github.bullet2013.aquatv;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -185,6 +184,11 @@ public class MainActivity extends Activity {
             lastStream = address;
             if (vlc == null) vlc = new VlcPlayback(this, vlcView, new VlcPlayback.Listener() {
                 @Override public void playing() { notifyPage("playing", "", videoWidth, videoHeight); }
+                @Override public void frameReady() {
+                    // Remove the opaque black layer on a real frame, not on a timer.
+                    resizeCover.setVisibility(View.INVISIBLE);
+                    vlcView.setAlpha(1f);
+                }
                 @Override public void size(int w, int h) { videoWidth = w; videoHeight = h; notifyPage("size", "", w, h); }
                 @Override public void error() { Log.w(TAG, "LibVLC failed: trying Media3"); playMedia3(Uri.parse(lastStream)); }
             });
@@ -192,6 +196,8 @@ public class MainActivity extends Activity {
                 player.stop();
                 playerView.setVisibility(View.INVISIBLE);
                 vlc.mute(muted);
+                resizeCover.setVisibility(View.VISIBLE);
+                vlcView.setAlpha(0f);
                 vlc.play(uri);
                 notifyPage("engine", "Android VLC / LibVLC", 0, 0);
                 return;
@@ -227,89 +233,40 @@ public class MainActivity extends Activity {
     private void positionVideo(JSONObject rect) {
         if (!rect.optBoolean("visible", true)) {
             playerView.setVisibility(View.INVISIBLE);
-            if (vlcView != null) vlcView.setVisibility(View.INVISIBLE);
-            if (resizeCover != null) resizeCover.setVisibility(View.INVISIBLE);
-            resizeSequence++;
+            vlcView.setVisibility(View.INVISIBLE);
+            resizeCover.setVisibility(View.INVISIBLE);
             return;
         }
-        double viewportWidth = rect.optDouble("viewportWidth", 0);
-        double viewportHeight = rect.optDouble("viewportHeight", 0);
-        if (viewportWidth <= 0 || viewportHeight <= 0 || webView.getWidth() <= 0) return;
-        double sx = webView.getWidth() / viewportWidth;
-        double sy = webView.getHeight() / viewportHeight;
+        double vw = rect.optDouble("viewportWidth", 0);
+        double vh = rect.optDouble("viewportHeight", 0);
+        if (vw <= 0 || vh <= 0 || webView.getWidth() <= 0) return;
+        double sx = webView.getWidth() / vw;
+        double sy = webView.getHeight() / vh;
         int x = (int) Math.round(rect.optDouble("x", 0) * sx);
         int y = (int) Math.round(rect.optDouble("y", 0) * sy);
         int w = (int) Math.round(rect.optDouble("width", 0) * sx);
         int h = (int) Math.round(rect.optDouble("height", 0) * sy);
         if (w < 20 || h < 20) return;
-
-        // The webpage reports the bounds regularly. Re-applying identical
-        // LayoutParams needlessly asks LibVLC to adjust its viewport again.
         boolean changed = x != videoRectX || y != videoRectY ||
                 w != videoRectW || h != videoRectH;
-        if (!changed) {
-            if (vlc != null && vlc.isActive()) vlcView.setVisibility(View.VISIBLE);
-            else playerView.setVisibility(View.VISIBLE);
-            return;
-        }
-        videoRectX = x;
-        videoRectY = y;
-        videoRectW = w;
-        videoRectH = h;
-        int sequence = ++resizeSequence;
-
-        boolean usingVlc = vlc != null && vlc.isActive();
-        Bitmap frozen = null;
-        if (usingVlc && vlcView.isAvailable() &&
-                vlcView.getWidth() > 0 && vlcView.getHeight() > 0) {
-            try {
-                // A small still frame makes the transition look immediate
-                // without loading a full-resolution screenshot into memory.
-                int bw = Math.min(640, vlcView.getWidth());
-                int bh = Math.max(1, (int) Math.round(
-                        (double) bw * vlcView.getHeight() / vlcView.getWidth()));
-                frozen = vlcView.getBitmap(bw, bh);
-            } catch (RuntimeException e) {
-                Log.w(TAG, "Cannot capture resize frame", e);
-            }
-        }
-
+        if (!changed) return;
+        videoRectX = x; videoRectY = y; videoRectW = w; videoRectH = h;
         FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(w, h);
-        position.leftMargin = x;
-        position.topMargin = y;
-
+        position.leftMargin = x; position.topMargin = y;
+        boolean usingVlc = vlc != null && vlc.isActive();
         if (usingVlc) {
-            // Hide the transient unscaled video while its output catches up.
-            vlcView.setAlpha(0f);
-            if (frozen != null) {
-                resizeCover.setImageBitmap(frozen);
-                resizeCover.setLayoutParams(new FrameLayout.LayoutParams(position));
-                resizeCover.setVisibility(View.VISIBLE);
-            } else {
-                resizeCover.setVisibility(View.INVISIBLE);
-                resizeCover.setImageDrawable(null);
-            }
-            // Tell the native engine the target size BEFORE Android re-lays
-            // out the TextureView. The cover remains aspect-preserved.
-            vlc.resize(w, h);
-        } else {
-            resizeCover.setVisibility(View.INVISIBLE);
+            // Cover the output immediately, before TextureView is relaid out.
+            resizeCover.setLayoutParams(new FrameLayout.LayoutParams(position));
             resizeCover.setImageDrawable(null);
-            vlcView.setAlpha(1f);
-        }
+            resizeCover.setVisibility(View.VISIBLE);
+            vlcView.setAlpha(0f);
+            vlc.resize(w, h);
+        } else resizeCover.setVisibility(View.INVISIBLE);
         playerView.setLayoutParams(new FrameLayout.LayoutParams(position));
         vlcView.setLayoutParams(new FrameLayout.LayoutParams(position));
         if (usingVlc) {
             playerView.setVisibility(View.INVISIBLE);
             vlcView.setVisibility(View.VISIBLE);
-            // VLC applies its display fit asynchronously. Wait a few display
-            // frames before uncovering, never letting a stretched frame show.
-            vlcView.postDelayed(() -> {
-                if (resizeSequence != sequence) return;
-                vlcView.setAlpha(1f);
-                resizeCover.setVisibility(View.INVISIBLE);
-                resizeCover.setImageDrawable(null);
-            }, 180L);
         } else {
             vlcView.setVisibility(View.INVISIBLE);
             playerView.setVisibility(View.VISIBLE);
