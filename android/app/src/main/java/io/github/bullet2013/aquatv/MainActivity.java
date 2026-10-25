@@ -57,6 +57,10 @@ public class MainActivity extends Activity {
     private int videoHeight = 0;
     private long switchStartMs = 0;
     private int switchNumber = 0;
+    // Audio starts much earlier than decoded live HLS video on some streams.
+    // Start the media immediately, but expose sound only with its first frame.
+    private boolean userMuted = false;
+    private boolean firstFrameShown = false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -104,8 +108,9 @@ public class MainActivity extends Activity {
             @Override public void onPlaybackStateChanged(int state) {
                 if (state == Player.STATE_READY) {
                     Log.i(TAG, "Switch #" + switchNumber + " READY after "
-                            + elapsedSwitchMs() + "ms");
-                    notifyPage("playing", "", videoWidth, videoHeight);
+                            + elapsedSwitchMs() + "ms; videoFrame=" + firstFrameShown);
+                    // STATE_READY may occur for audio well before video. Do not
+                    // tell the webpage the stream is visible until a frame renders.
                 } else if (state == Player.STATE_BUFFERING) {
                     Log.d(TAG, "Switch #" + switchNumber + " buffering after "
                             + elapsedSwitchMs() + "ms");
@@ -114,7 +119,14 @@ public class MainActivity extends Activity {
             }
             @Override public void onRenderedFirstFrame() {
                 Log.i(TAG, "Switch #" + switchNumber + " FIRST FRAME after "
-                        + elapsedSwitchMs() + "ms");
+                        + elapsedSwitchMs() + "ms; liveOffset=" + player.getCurrentLiveOffset());
+                if (!firstFrameShown) {
+                    firstFrameShown = true;
+                    // Synchronize audible sound with the actual displayed frame.
+                    // No artificial timeout: playback and decoding ran concurrently.
+                    player.setVolume(userMuted ? 0f : 1f);
+                    notifyPage("playing", "", videoWidth, videoHeight);
+                }
             }
             @Override public void onVideoSizeChanged(@NonNull VideoSize size) {
                 videoWidth = size.width;
@@ -192,7 +204,10 @@ public class MainActivity extends Activity {
             switch (obj.optString("type", "")) {
                 case "play": playStream(obj.optString("url", "")); break;
                 case "rect": positionVideo(obj); break;
-                case "mute": player.setVolume(obj.optBoolean("muted", false) ? 0f : 1f); break;
+                case "mute":
+                    userMuted = obj.optBoolean("muted", false);
+                    player.setVolume((userMuted || !firstFrameShown) ? 0f : 1f);
+                    break;
                 default: break;
             }
         } catch (JSONException exception) { Log.w(TAG, "Bad bridge JSON", exception); }
@@ -215,10 +230,20 @@ public class MainActivity extends Activity {
             switchStartMs = SystemClock.elapsedRealtime();
             switchNumber++;
             Log.i(TAG, "Switch #" + switchNumber + " start");
+            firstFrameShown = false;
+            player.setVolume(0f); // hold audio only until decoded video first frame
             videoWidth = videoHeight = 0;
             MediaItem.Builder item = new MediaItem.Builder().setUri(uri);
             if (uri.getPath() != null && uri.getPath().toLowerCase().endsWith(".m3u8")) {
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
+                // Standard live HLS starts about 3 segments behind the edge.
+                // IPTV zapping should start at a more recent complete segment.
+                // ExoPlayer clamps the offset to available playlist segments.
+                item.setLiveConfiguration(new MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(3000L)
+                        .setMinPlaybackSpeed(1.0f)
+                        .setMaxPlaybackSpeed(1.03f)
+                        .build());
             }
             player.setMediaItem(item.build());
             player.prepare();
