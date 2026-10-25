@@ -16,6 +16,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * Experimental browser-only AQUA TV: the same hls.js and HTML video that
@@ -71,11 +75,52 @@ public class MainActivity extends Activity {
             @Override public WebResourceResponse shouldInterceptRequest(
                     WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if ("http".equalsIgnoreCase(uri.getScheme())
-                        && !MEDIA_HOST.equalsIgnoreCase(uri.getHost())) {
-                    Log.w(TAG, "Blocked other HTTP resource: " + uri.getHost());
-                    return new WebResourceResponse("text/plain", "UTF-8",
-                            new ByteArrayInputStream(new byte[0]));
+                // Serve a test-only app.js without the HTTPS guard, leaving
+                // the deployed GitHub Pages website entirely unchanged.
+                if ("https".equalsIgnoreCase(uri.getScheme())
+                        && "bullet2013.github.io".equalsIgnoreCase(uri.getHost())
+                        && "/aqua-tv/app.js".equals(uri.getPath())) {
+                    try {
+                        InputStream js = getAssets().open("aqua-webtest-app.js");
+                        return new WebResourceResponse("application/javascript", "UTF-8", js);
+                    } catch (IOException e) {
+                        Log.e(TAG, "Cannot load test-only JS", e);
+                    }
+                }
+                if ("http".equalsIgnoreCase(uri.getScheme())) {
+                    if (!MEDIA_HOST.equalsIgnoreCase(uri.getHost())
+                            || uri.getPort() != 2222) {
+                        Log.w(TAG, "Blocked external HTTP resource: " + uri.getHost());
+                        return new WebResourceResponse("text/plain", "UTF-8",
+                                new ByteArrayInputStream(new byte[0]));
+                    }
+                    // This whitelist-limited response bridge allows hls.js
+                    // on HTTPS Pages to fetch the user's own HTTP IPTV stream.
+                    // It does NOT make a general-purpose arbitrary URL proxy.
+                    try {
+                        HttpURLConnection conn = (HttpURLConnection)
+                                new URL(uri.toString()).openConnection();
+                        conn.setConnectTimeout(6000);
+                        conn.setReadTimeout(12000);
+                        conn.setRequestProperty("Accept", "*/*");
+                        int code = conn.getResponseCode();
+                        String mime = uri.getPath() != null &&
+                                uri.getPath().endsWith(".m3u8")
+                                ? "application/vnd.apple.mpegurl" : "video/mp2t";
+                        InputStream response = code >= 400 ?
+                                conn.getErrorStream() : conn.getInputStream();
+                        if (response == null) response = new ByteArrayInputStream(new byte[0]);
+                        WebResourceResponse out = new WebResourceResponse(
+                                mime, null, code, code == 200 ? "OK" : "HTTP " + code,
+                                java.util.Collections.singletonMap(
+                                        "Access-Control-Allow-Origin",
+                                        "https://bullet2013.github.io"), response);
+                        return out;
+                    } catch (Exception e) {
+                        Log.w(TAG, "IPTV HTTP load failed " + uri.getPath(), e);
+                        return new WebResourceResponse("text/plain", "UTF-8",
+                                new ByteArrayInputStream(new byte[0]));
+                    }
                 }
                 return null;
             }
