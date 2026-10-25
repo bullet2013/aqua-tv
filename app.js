@@ -4,6 +4,65 @@ const $ = selector => document.querySelector(selector);
 const el = id => document.getElementById(id);
 const video = el('video');
 const shell = el('videoShell');
+// On Android the application exposes this object only to the trusted GitHub origin.
+// Ordinary browsers keep hls.js/HTML5 playback unchanged.
+const AQUA_NATIVE = Boolean(window.AquaAndroid && typeof window.AquaAndroid.postMessage === 'function');
+function nativeSend(payload) {
+  if (!AQUA_NATIVE) return;
+  try { window.AquaAndroid.postMessage(JSON.stringify(payload)); }
+  catch (error) { console.warn('AQUA native message failed', error); }
+}
+function updateNativeVideoRect() {
+  if (!AQUA_NATIVE) return;
+  const rect = shell.getBoundingClientRect();
+  const guide = el('guideView');
+  const right = document.querySelector('.right-panel');
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const point = n => Math.round(n * 10) / 10;
+  nativeSend({type:'rect', x:point(rect.left), y:point(rect.top), width:point(rect.width),
+    height:point(rect.height), viewportWidth:vw, viewportHeight:vh,
+    visible:rect.width > 0 && rect.height > 0 });
+  // Punch an actual transparent hole through the website backgrounds, so the
+  // hardware-decoded TextureView behind this transparent WebView is visible.
+  // The native video remains independent of EPG and other site rendering.
+  const cutout = (parentRect) => {
+    const x=point(rect.left-parentRect.left), y=point(rect.top-parentRect.top);
+    const w=point(rect.width), h=point(rect.height);
+    return `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${x}px ${y}px, ${x}px ${y+h}px, ${x+w}px ${y+h}px, ${x+w}px ${y}px, ${x}px ${y}px)`;
+  };
+  if (guide && right) {
+    guide.style.setProperty('--native-hole', cutout(guide.getBoundingClientRect()));
+    right.style.setProperty('--native-right-hole',cutout(right.getBoundingClientRect()));
+  }
+}
+if (AQUA_NATIVE) {
+  document.documentElement.classList.add('aqua-native-android');
+  window.AquaNative = {
+    onStatus(what, message, width, height) {
+      if (what === 'playing') {
+        state.playing=true; state.failed=false; state.lastError=null;
+        el('playerPlaceholder').hidden=true;
+      } else if (what === 'error') {
+        recordIssue('network', String(message || 'Ошибка Android-видеоплеера'), 'Media3 ExoPlayer');
+      } else if (what === 'buffering') {
+        state.playing=false;
+      }
+      if (width > 0 && height > 0) {
+        el('infoBarResolution').textContent=`${width} × ${height}`;
+        el('infoBarQuality').textContent=height >= 2160 ? 'UHD' : height >= 720 ? 'HD' : 'SD';
+        state.videoCodec=`Android Media3 (${width} × ${height})`;
+      }
+      updateDiagnostics();
+    }
+  };
+  window.addEventListener('resize', () => requestAnimationFrame(updateNativeVideoRect));
+  window.addEventListener('orientationchange', () => setTimeout(updateNativeVideoRect, 150));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) requestAnimationFrame(updateNativeVideoRect);
+  });
+  setInterval(() => { if (state?.activeId) updateNativeVideoRect(); }, 1200);
+}
 const clockFormat = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
 const state = {
   channels: [], guide: {}, epgStatus: 'loading',
@@ -423,6 +482,7 @@ function setGuide(open) {
     el('fullscreenStage').hidden = true;
     state.focusedId = state.activeId;
     renderAll();
+    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
     requestAnimationFrame(() => {
       const selected = el('channelList').querySelector('.channel-row.focused');
       selected?.scrollIntoView({ block: 'nearest' });
@@ -433,9 +493,11 @@ function setGuide(open) {
     el('fullscreenStage').prepend(shell);
     el('guideView').hidden = true;
     revealInfoBar();
+    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
   }
 }
 function syncMuteButton() {
+  if (AQUA_NATIVE) nativeSend({type:'mute', muted:video.muted});
   video.dataset.muted = String(video.muted);
 }
 function tryPlay(initial = false) {
@@ -604,6 +666,16 @@ function playChannel(channel, initial = false) {
   if (state.guideOpen) { renderChannels(); renderSchedule(); updateProgramFocus(); }
   updateDiagnostics();
   const src = streamUrl(channel);
+  if (AQUA_NATIVE) {
+    state.playerMode = 'Android Media3 / ExoPlayer';
+    // Native player can fetch HTTP HLS without mixing it into the HTTPS WebView.
+    // No browser hls.js, MediaSource, or WebView fetch is used for video.
+    el('playerPlaceholder').hidden = true;
+    nativeSend({ type:'play', url:src });
+    requestAnimationFrame(updateNativeVideoRect);
+    updateDiagnostics();
+    return;
+  }
   if (location.protocol === 'https:' && new URL(src).protocol === 'http:') {
     recordIssue('mixed', 'HTTP-поток на HTTPS-странице может блокироваться браузером.',
       'Mixed content: страница открыта по HTTPS, поток указан по HTTP.');
@@ -1547,6 +1619,7 @@ function wireEvents() {
 async function boot() {
   applyFontSize(state.fontPx);
   wireEvents();
+  if (AQUA_NATIVE && window.ResizeObserver) new ResizeObserver(updateNativeVideoRect).observe(shell);
   clockTick();
   syncMuteButton();
   const startupText = el('startupText');
@@ -1560,8 +1633,9 @@ async function boot() {
     const lastUrl = localStorage.getItem('aqua:lastChannelUrl');
     const last = state.channels.find(c => c.id === lastId) || state.channels.find(c => c.url === lastUrl);
     const channel = last || state.channels[0];
-    // Muted autoplay is permitted by most browsers. Audio can be enabled by the user.
-    video.muted = true;
+    // Native Android playback may start with sound; browser remains muted to
+    // satisfy browser autoplay rules on ordinary HTTPS websites.
+    video.muted = !AQUA_NATIVE;
     syncMuteButton();
     playChannel(channel, true);
     el('startup').hidden = true;

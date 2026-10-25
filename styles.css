@@ -814,3 +814,32 @@ button:focus-visible,input:focus-visible,.channel-row:focus-visible {outline:3px
   .infobar-remaining {font-size:10px}
 }
 
+
+/* Android Media3: actual decoded video sits BEHIND this transparent WebView.
+   The guide backdrop and right panel each have a dynamic cutout only at the
+   video region. All the HTML labels, infobar and focus frames stay on top. */
+html.aqua-native-android,
+html.aqua-native-android body {background:transparent!important}
+html.aqua-native-android .fullscreen-stage,
+html.aqua-native-android .fullscreen-stage .video-shell,
+html.aqua-native-android .preview-slot,
+html.aqua-native-android .preview-slot .video-shell {background:transparent!important}
+html.aqua-native-android .video-shell video {opacity:0!important;background:transparent!important}
+html.aqua-native-android .video-shell .player-placeholder {display:none!important}
+html.aqua-native-android .guide-view {background:transparent!important}
+html.aqua-native-android .guide-view::before {
+  content:"";position:absolute;inset:0;width:auto;height:auto;
+  border:0;border-radius:0;left:0;bottom:0;
+  background:linear-gradient(135deg,#a8e4ff 0%,#7dcef8 45%,#c0eeff 100%);
+  clip-path:var(--native-hole,none);pointer-events:none
+}
+html.aqua-native-android .right-panel {
+  position:relative;isolation:isolate;background:transparent!important;
+  border-color:transparent!important;box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+html.aqua-native-android .right-panel::before {
+  content:"";position:absolute;inset:0;z-index:-1;
+  border-radius:18px;background:rgba(245,252,255,.93);
+  clip-path:var(--native-right-hole,none);pointer-events:none
+}
