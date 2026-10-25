@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -150,6 +151,24 @@ public class MainActivity extends Activity {
                 if (url != null && url.startsWith(SITE)) {
                     view.evaluateJavascript(EXO_SETTINGS_ENTRY_SCRIPT, null);
                 }
+            }
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if ("https".equalsIgnoreCase(uri.getScheme())
+                        && "bullet2013.github.io".equalsIgnoreCase(uri.getHost())) {
+                    String path = uri.getPath();
+                    String asset = null;
+                    String mime = null;
+                    if ("/aqua-tv/app.js".equals(path)) { asset = "compat/app.js"; mime = "application/javascript"; }
+                    else if ("/aqua-tv/config.js".equals(path)) { asset = "compat/config.js"; mime = "application/javascript"; }
+                    else if ("/aqua-tv/styles.css".equals(path)) { asset = "compat/styles.css"; mime = "text/css"; }
+                    if (asset != null) {
+                        try {
+                            return new WebResourceResponse(mime, "UTF-8", getAssets().open(asset));
+                        } catch (java.io.IOException ex) { Log.e(TAG, "Missing UI asset " + asset, ex); }
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
