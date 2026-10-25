@@ -6,6 +6,11 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android-apk.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
 permissions:
   contents: read
 jobs:
@@ -19,8 +24,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # v3 requested Google's removed 'tools' SDK package and failed before Gradle.
+      # v4 uses supported command-line tools without that obsolete package.
       - name: Настроить Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
       - name: Установить Android SDK 35
         run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
       - name: Настроить Gradle
@@ -29,7 +38,7 @@ jobs:
           gradle-version: '8.9'
       - name: Собрать установочный APK
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Скачать APK из Actions
         uses: actions/upload-artifact@v4
         with:
