@@ -231,7 +231,10 @@ public class MainActivity extends Activity {
             vlcParams.leftMargin = x; vlcParams.topMargin = y;
             vlcView.setLayoutParams(vlcParams);
         }
-        if (vlc != null && vlc.isActive()) vlcView.setVisibility(View.VISIBLE);
+        if (vlc != null && vlc.isActive()) {
+            vlcView.setVisibility(View.VISIBLE);
+            vlc.resize(w, h);
+        }
         else playerView.setVisibility(View.VISIBLE);
     }
 
