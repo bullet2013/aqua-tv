@@ -748,6 +748,26 @@ function playChannel(channel, initial = false) {
       maxBufferLength: 30, maxBufferSize: 40 * 1000 * 1000
     });
     state.hls = hls;
+    // Observe HLS demuxing and MediaSource state; never modify the stream.
+    const trace = (name, label, describe) => {
+      const eventType = window.Hls.Events[name];
+      if (!eventType) return;
+      hls.on(eventType, (_event, data) => {
+        if (session !== state.session || hls !== state.hls) return;
+        let detail = '';
+        try { detail = describe(data); } catch (e) { detail = String(e); }
+        probeEvent(label, detail);
+      });
+    };
+    trace('MANIFEST_LOADED', 'Плейлист загружен', d => 'levels=' + (d.levels?.length ?? '?'));
+    trace('LEVEL_LOADED', 'HLS сегменты', d =>
+      'count=' + (d.details?.fragments?.length ?? '?') + ', live=' + d.details?.live);
+    trace('BUFFER_CODECS', 'Кодеки сегмента', d =>
+      Object.entries(d.tracks || {}).map(([key, value]) =>
+        key + '=' + (value.codec || value.levelCodec || '?') + ', container=' + (value.container || '?')).join(' / '));
+    trace('BUFFER_CREATED', 'MediaSource создан', d => Object.keys(d.tracks || {}).join(','));
+    trace('FRAG_LOADED', 'Сегмент получен', d => 'sn=' + (d.frag?.sn ?? '?'));
+    trace('FRAG_BUFFERED', 'Сегмент добавлен', d => 'sn=' + (d.frag?.sn ?? '?'));
     hls.on(window.Hls.Events.MEDIA_ATTACHED, () => { if (session === state.session) hls.loadSource(src); });
     hls.on(window.Hls.Events.MANIFEST_PARSED, (_event, data) => {
       if (session !== state.session) return;
@@ -764,6 +784,7 @@ function playChannel(channel, initial = false) {
       if (hls !== state.hls || session !== state.session) return;
       const explained = hlsErrorMessage(data);
       const technical = hlsErrorTechnical(data);
+      probeEvent(data.fatal ? 'HLS FATAL' : 'HLS WARNING', technical);
       if (!data.fatal) {
         // hls.js may resolve nonfatal fragment/segment errors by itself.
         state.lastError = { ...explained, technical };
@@ -1643,6 +1664,7 @@ function wireEvents() {
   });
   video.addEventListener('resize', updateVideoQuality);
   video.addEventListener('playing', () => {
+    probeEvent('ВИДЕО ИГРАЕТ', video.videoWidth + 'x' + video.videoHeight);
     state.playing = true; state.failed = false; state.lastError = null;
     clearTimeout(state.startupTimer);
     el('playerPlaceholder').hidden = true;
@@ -1652,11 +1674,13 @@ function wireEvents() {
     updateDiagnostics();
   });
   video.addEventListener('loadedmetadata', () => {
+    probeEvent('Метаданные видео', video.videoWidth + 'x' + video.videoHeight);
     updateVideoQuality();
     if (!state.hls && !state.failed) tryPlay(state.initialAutoplay);
   });
-  video.addEventListener('waiting', () => { if (state.playing) playStatus('Буферизация…'); });
+  video.addEventListener('waiting', () => { probeEvent('video waiting'); if (state.playing) playStatus('Буферизация…'); });
   video.addEventListener('error', () => {
+    probeEvent('video ERROR', (video.error?.code ?? '?') + ': ' + (video.error?.message || ''));
     if (state.failed || !state.activeId) return;
     const code = video.error?.code;
     const reason = { 1: 'Воспроизведение остановлено браузером.',
