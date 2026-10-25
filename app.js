@@ -1532,6 +1532,10 @@ function wireEvents() {
   el('favoriteButton').addEventListener('click', toggleFavorite);
   el('menuBackdrop').addEventListener('click', () => closeCategoryMenu());
   el('openSettings').addEventListener('click', () => { state.focusedGroup = SETTINGS_ITEM; openFontSettings(); });
+  if (AQUA_NATIVE) {
+    el('androidExoSettings').hidden = false;
+    el('openExoSettings').addEventListener('click', () => nativeSend({type:'exoSettings'}));
+  }
   el('closeFontSettings').addEventListener('click', closeFontSettings);
   el('fontSettingsBackdrop').addEventListener('click', closeFontSettings);
   el('fontSizeForm').addEventListener('submit', event => {
