@@ -36,6 +36,58 @@ jobs:
         env:
           AQUA_EPG_URL: ${{ vars.AQUA_EPG_URL }}
         run: node tools/epg-update.mjs
+      - name: Собрать отдельную тестовую версию сайта для старых WebView
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the stable site files untouched. The preview is a sibling
+          # under /aqua-tv/legacy-test/, sourced from an unmerged feature branch.
+          git fetch --depth=1 origin feature/legacy-compatible-web-ui
+          mkdir -p .legacy-preview-build/tools legacy-test/dist/legacy
+          for file in index.html app.js styles.css config.js loader.js babel.config.json tools/build-legacy-ui.mjs; do
+            mkdir -p ".legacy-preview-build/$(dirname "$file")"
+            git show "FETCH_HEAD:$file" > ".legacy-preview-build/$file"
+          done
+          (
+            cd .legacy-preview-build
+            npm install --no-save --no-audit --no-fund \
+              @babel/core@7 @babel/cli@7 @babel/preset-env@7 \
+              core-js-bundle@3 regenerator-runtime@0.14 pako@2
+            node tools/build-legacy-ui.mjs
+            node --check loader.js
+            node --check dist/legacy/app.js
+          )
+          cp .legacy-preview-build/index.html .legacy-preview-build/app.js \
+             .legacy-preview-build/styles.css .legacy-preview-build/config.js \
+             .legacy-preview-build/loader.js legacy-test/
+          cp .legacy-preview-build/dist/legacy/*.js legacy-test/dist/legacy/
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          config = Path("legacy-test/config.js")
+          text = config.read_text(encoding="utf-8")
+          for original, parent in (
+              ("./playlist.m3u", "../playlist.m3u"),
+              ("./epg.xml.gz", "../epg.xml.gz"),
+              ("./epg-meta.json", "../epg-meta.json"),
+          ):
+              assert original in text, original
+              text = text.replace(original, parent)
+          config.write_text(text, encoding="utf-8")
+          # Browser-only preview: video streams use plain HTTP and cannot
+          # play inside an HTTPS browser. Remove blocking remote HLS library.
+          html = Path("legacy-test/index.html")
+          source = html.read_text(encoding="utf-8")
+          source, count = re.subn(
+              r'\s*<script src="https://cdn\.jsdelivr\.net/npm/hls\.js[^"]*" defer></script>',
+              "", source)
+          assert count == 1, "Failed to remove external HLS script"
+          html.write_text(source, encoding="utf-8")
+          PY
+          rm -rf .legacy-preview-build
+          test -s legacy-test/dist/legacy/app.js
+          test -s legacy-test/dist/legacy/polyfills.js
+          test -s legacy-test/dist/legacy/pako.min.js
       - name: Настроить GitHub Pages
         uses: actions/configure-pages@v5
       - name: Загрузить сайт и подготовленный EPG
