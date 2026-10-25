@@ -47,11 +47,27 @@ if (AQUA_NATIVE) {
         recordIssue('network', String(message || 'Ошибка Android-видеоплеера'), 'Media3 ExoPlayer');
       } else if (what === 'buffering') {
         state.playing=false;
+      } else if (what === 'engine') {
+        // Native code is authoritative: different APKs run Media3, LibVLC,
+        // or ExoPlayer2 + FFmpeg behind exactly the same WebView site.
+        state.playerMode=String(message || 'Нативный Android-плеер');
+      } else if (what === 'audio') {
+        const mime=String(message || '').toLowerCase();
+        state.audioCodec=mime.includes('mpeg-l2') ? 'MPEG Layer II / MP2'
+          : mime.includes('eac3') ? 'Dolby Digital Plus / E-AC-3'
+          : mime.includes('ac3') ? 'Dolby Digital / AC-3'
+          : mime.includes('mp4a') ? 'AAC'
+          : mime.includes('mpeg') ? 'MPEG Audio'
+          : mime.includes('opus') ? 'Opus'
+          : mime.includes('vorbis') ? 'Vorbis'
+          : message || 'Не определён';
+      } else if (what === 'firstFrame') {
+        state.nativeFirstFrameTime=String(message || '');
       }
       if (width > 0 && height > 0) {
         el('infoBarResolution').textContent=`${width} × ${height}`;
         el('infoBarQuality').textContent=height >= 2160 ? 'UHD' : height >= 720 ? 'HD' : 'SD';
-        state.videoCodec=`Android Media3 (${width} × ${height})`;
+        state.videoCodec=`Нативное видео (${width} × ${height})`;
       }
       updateDiagnostics();
     }
@@ -73,7 +89,7 @@ const state = {
   guideOpen: false, hls: null, hlsErrorCount: 0, playing: false,
   failed: false, retryTimer: null, startupTimer: null, session: 0,
   playerMode: '—', videoCodec: 'Не определён', audioCodec: 'Не определён',
-  lastError: null, initialAutoplay: false, epgDetails: { status: 'Ожидание', error: '', source: '—', updatedAt: 0, lastAttemptAt: 0, matched: 0, programmes: 0, seenChannelIds: 0, earliest: null, latest: null, progress: '' }
+  lastError: null, nativeFirstFrameTime: '', initialAutoplay: false, epgDetails: { status: 'Ожидание', error: '', source: '—', updatedAt: 0, lastAttemptAt: 0, matched: 0, programmes: 0, seenChannelIds: 0, earliest: null, latest: null, progress: '' }
 };
 
 function loadStorageJSON(key, fallback) {
@@ -566,7 +582,8 @@ function updateDiagnostics() {
   el('diagVideo').textContent = state.videoCodec;
   el('diagAudio').textContent = state.audioCodec;
   el('diagError').textContent = state.lastError?.message || (state.playing ? 'Нет ошибок' : 'Ожидаем видеопоток…');
-  el('diagTechnical').textContent = state.lastError?.technical || '—';
+  el('diagTechnical').textContent = state.lastError?.technical ||
+    (AQUA_NATIVE && state.nativeFirstFrameTime ? `Первый видеокадр: ${state.nativeFirstFrameTime}` : '—');
   el('diagAdvice').textContent = diagAdvice();
   const alt = alternateChannel();
   el('tryAlternate').hidden = !alt;
@@ -583,7 +600,8 @@ function playerReport() {
     `Видео: ${state.videoCodec}`,
     `Аудио: ${state.audioCodec}`,
     `Ошибка: ${state.lastError?.message || '—'}`,
-    `Технические данные: ${state.lastError?.technical || '—'}`,
+    `Технические данные: ${state.lastError?.technical ||
+      (AQUA_NATIVE && state.nativeFirstFrameTime ? `Первый видеокадр: ${state.nativeFirstFrameTime}` : '—')}`,
     `Браузер: ${navigator.userAgent}`
   ].join('\n');
 }
@@ -644,6 +662,7 @@ function playChannel(channel, initial = false) {
   state.playerMode = 'Определяем…';
   state.videoCodec = 'Не определён';
   state.audioCodec = 'Не определён';
+  state.nativeFirstFrameTime = '';
   state.lastError = null;
   state.initialAutoplay = initial;
   // Do not show stale dimensions from the previously playing stream.
@@ -667,7 +686,7 @@ function playChannel(channel, initial = false) {
   updateDiagnostics();
   const src = streamUrl(channel);
   if (AQUA_NATIVE) {
-    state.playerMode = 'Android Media3 / ExoPlayer';
+    state.playerMode = 'Нативный Android-плеер';
     // Native player can fetch HTTP HLS without mixing it into the HTTPS WebView.
     // No browser hls.js, MediaSource, or WebView fetch is used for video.
     el('playerPlaceholder').hidden = true;
