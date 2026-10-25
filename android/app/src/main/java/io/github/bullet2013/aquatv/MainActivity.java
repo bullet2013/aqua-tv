@@ -390,11 +390,18 @@ public class MainActivity extends Activity {
         int w = (int) Math.round(rect.optDouble("width", 0) * sx);
         int h = (int) Math.round(rect.optDouble("height", 0) * sy);
         if (w < 20 || h < 20) return;
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(w, h);
-        params.leftMargin = x;
-        params.topMargin = y;
-        playerView.setLayoutParams(params);
-        playerView.setVisibility(View.VISIBLE);
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) playerView.getLayoutParams();
+        // WebView sends many duplicate rectangles while EPG and focus update.
+        // Avoid invalidating TextureView and triggering a video-surface redraw.
+        if (params.width != w || params.height != h ||
+                params.leftMargin != x || params.topMargin != y) {
+            params.width = w;
+            params.height = h;
+            params.leftMargin = x;
+            params.topMargin = y;
+            playerView.setLayoutParams(params);
+        }
+        if (playerView.getVisibility() != View.VISIBLE) playerView.setVisibility(View.VISIBLE);
     }
 
     private void notifyPage(String status, String message, int width, int height) {
