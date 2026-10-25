@@ -1,0 +1,38 @@
+name: AQUA TV — Tizen widget source
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tizen/**'
+      - '.github/workflows/tizen-widget.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate widget resources
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path=Path('tizen')
+          ET.parse(path/'config.xml')
+          for name in ('index.html','bridge.js','config.js'):
+              assert (path/name).is_file(), name
+          assert 'window.AquaAndroid' in (path/'bridge.js').read_text()
+          assert 'webapis.avplay' in (path/'bridge.js').read_text()
+          PY
+          node --check tizen/bridge.js
+          node --check tizen/config.js
+      - name: Package unsigned widget source
+        run: |
+          cd tizen
+          zip -q -9 ../AQUA-TV-Tizen-UNSIGNED.wgt config.xml index.html bridge.js config.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AQUA-TV-Tizen-widget-unsigned
+          path: AQUA-TV-Tizen-UNSIGNED.wgt
+          retention-days: 30
