@@ -6,7 +6,6 @@
   var source = '';
   var muted = false;
   var allowedHost = '31.41.12.104';
-  var fullscreen = false;
   function status(type, message, width, height) {
     if (window.AquaNative && window.AquaNative.onStatus)
       window.AquaNative.onStatus(type, message || '', width || 0, height || 0);
@@ -71,9 +70,13 @@
   };
   function onKey(e) {
     var key = e.keyCode;
-    if(key===10009 || key===27) {
+    if ((key===10009 || key===27) && e.isTrusted !== false) {
+      // Translate remote Back to Escape for the existing AQUA TV key handler.
       e.preventDefault();
-      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',keyCode:27,bubbles:true}));
+      var ev = document.createEvent('Event');
+      ev.initEvent('keydown',true,true);
+      ev.key='Escape';
+      document.dispatchEvent(ev);
     }
   }
   document.addEventListener('keydown',onKey,false);
