@@ -44,7 +44,7 @@ jobs:
           # under /aqua-tv/legacy-test/, sourced from an unmerged feature branch.
           git fetch --depth=1 origin feature/legacy-compatible-web-ui
           mkdir -p .legacy-preview-build/tools legacy-test/dist/legacy
-          for file in index.html app.js styles.css config.js loader.js babel.config.json tools/build-legacy-ui.mjs; do
+          for file in index.html app.js styles.css tv.css config.js loader.js babel.config.json tools/build-legacy-ui.mjs; do
             mkdir -p ".legacy-preview-build/$(dirname "$file")"
             git show "FETCH_HEAD:$file" > ".legacy-preview-build/$file"
           done
@@ -58,7 +58,7 @@ jobs:
             node --check dist/legacy/app.js
           )
           cp .legacy-preview-build/index.html .legacy-preview-build/app.js \
-             .legacy-preview-build/styles.css .legacy-preview-build/config.js \
+             .legacy-preview-build/styles.css .legacy-preview-build/tv.css .legacy-preview-build/config.js \
              .legacy-preview-build/loader.js legacy-test/
           cp .legacy-preview-build/dist/legacy/*.js legacy-test/dist/legacy/
           python3 - <<'PY'
