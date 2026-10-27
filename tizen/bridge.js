@@ -2,6 +2,20 @@
 (function () {
   'use strict';
   var player = window.webapis && window.webapis.avplay;
+  function startupError(text) {
+    var message = document.getElementById('startupText');
+    if (message) message.textContent = text;
+    var spinner = document.querySelector('.startup-spinner');
+    if (spinner) spinner.style.display = 'none';
+  }
+  window.addEventListener('error',function(e) {
+    if (document.getElementById('startup') && !document.getElementById('startup').hidden)
+      startupError('Ошибка интерфейса: ' + (e.message || 'JavaScript'));
+  });
+  window.setTimeout(function() {
+    var splash = document.getElementById('startup');
+    if (splash && !splash.hidden) startupError('Нет ответа при загрузке плейлиста. Проверьте интернет и подключение к GitHub Pages.');
+  }, 25000);
   var generation = 0;
   var source = '';
   var muted = false;
@@ -25,7 +39,7 @@
   }
   function play(url) {
     var parsed;
-    try { parsed = new URL(url); }
+    try { parsed = document.createElement('a'); parsed.href = url; }
     catch (e) { status('error','Некорректный адрес');return; }
     if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
         parsed.hostname !== allowedHost) {
