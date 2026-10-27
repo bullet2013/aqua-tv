@@ -102,6 +102,13 @@
         muted = !!command.muted;
         try { window.webapis.tvAudioControl.setMute(muted); } catch (ignore) {}
       }
+      else if (command.type === 'exit') {
+        try {
+          if (window.tizen && tizen.application) {
+            tizen.application.getCurrentApplication().exit();
+          } else { window.close(); }
+        } catch (e) { console.log('Tizen exit: '+e); }
+      }
       else if (command.type === 'exoSettings') {
         alert('Настройки ExoPlayer доступны только в Android. Samsung использует AVPlay.');
       }
