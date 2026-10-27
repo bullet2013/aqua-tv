@@ -54,3 +54,85 @@ html.aqua-tizen .infobar-next{font-size:21px!important}
 html.aqua-tizen .infobar-remaining{font-size:19px!important}
 html.aqua-tizen .infobar-resolution,html.aqua-tizen .infobar-quality{font-size:19px!important}
 html.aqua-tizen .row-scroll-track,html.aqua-tizen .row-name-track{transform:none!important}
+
+/* Tizen TV ultra-light video plane and OSD v4 */
+/* Native AVPlay is BELOW the HTML compositor: every ancestor of the
+   preview window must be transparent, including html/body/guide-layout. */
+html.aqua-tizen, html.aqua-tizen body,
+html.aqua-tizen .guide-view,
+html.aqua-tizen .guide-layout,
+html.aqua-tizen .right-panel,
+html.aqua-tizen .preview-slot,
+html.aqua-tizen .preview-slot .video-shell,
+html.aqua-tizen .fullscreen-stage,
+html.aqua-tizen .fullscreen-stage .video-shell {
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+}
+html.aqua-tizen .guide-view:before,
+html.aqua-tizen .guide-layout:before,
+html.aqua-tizen .right-panel:before {display:none!important}
+html.aqua-tizen .channels-panel {background:#e6f5ff!important}
+html.aqua-tizen .preview-slot {border:2px solid #e6f5ff!important;box-shadow:none!important}
+/* Put the programme panel's solid backgrounds strictly BELOW the video aperture. */
+html.aqua-tizen .preview-meta,
+html.aqua-tizen .program-list {background:#eaf7ff!important}
+/* No expensive fading effects, scrolling text, blur or shadow on the TV. */
+html.aqua-tizen .channel-row,
+html.aqua-tizen .schedule-row,
+html.aqua-tizen .category-button,
+html.aqua-tizen .fullscreen-infobar,
+html.aqua-tizen .preview-slot,
+html.aqua-tizen .guide-view,
+html.aqua-tizen .channels-panel,
+html.aqua-tizen .right-panel {
+  animation:none!important;transition:none!important;
+  box-shadow:none!important;filter:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+html.aqua-tizen .row-name-track,
+html.aqua-tizen .row-scroll-track {transform:none!important;animation:none!important}
+/* Fixed left logo; every bit of programme information stacks to its RIGHT. */
+html.aqua-tizen .fullscreen-infobar {
+  display:-webkit-flex!important;display:flex!important;
+  flex-direction:row!important;flex-wrap:nowrap!important;
+  align-items:center!important;
+  gap:0!important;
+  min-height:212px!important;
+  padding:20px 48px 28px!important;
+  background:#061c35!important;
+}
+html.aqua-tizen .infobar-logo-wrap {
+  -webkit-flex:0 0 118px!important;flex:0 0 118px!important;
+  width:118px!important;margin:0 48px 0 0!important;
+  align-self:center!important;
+}
+html.aqua-tizen .infobar-logo {width:106px!important;height:106px!important}
+html.aqua-tizen .infobar-main {
+  display:-webkit-flex!important;display:flex!important;
+  -webkit-flex:1 1 auto!important;flex:1 1 auto!important;
+  flex-direction:column!important;align-items:stretch!important;
+  min-width:0!important;max-width:none!important;
+  text-align:left!important;
+}
+html.aqua-tizen .infobar-channel {font-size:38px!important;margin:0 0 10px!important}
+html.aqua-tizen .infobar-now {font-size:28px!important;margin:0 0 9px!important}
+html.aqua-tizen .infobar-timeline {
+  display:flex!important;width:100%!important;
+  max-width:860px!important;min-height:11px!important;
+  margin:0 0 12px!important;
+}
+html.aqua-tizen .infobar-track {height:8px!important;min-width:70px!important}
+html.aqua-tizen .infobar-next {
+  display:block!important;margin:0!important;
+  font-size:23px!important;
+  white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+}
+html.aqua-tizen .infobar-video-info {
+  -webkit-flex:0 0 auto!important;flex:0 0 auto!important;
+  align-self:center!important;margin-left:24px!important;
+}
+/* Small 1-line rows, no repainting effects on focus. */
+html.aqua-tizen .channel-row {min-height:38px!important}
+html.aqua-tizen .program-list {overscroll-behavior:auto!important}
