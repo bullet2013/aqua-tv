@@ -38,6 +38,10 @@ function updateNativeVideoRect() {
     lastNativeRectKey = key;
     nativeSend(payload);
   }
+  // Samsung AVPlay is composited as a separate TV video plane. On old Tizen
+  // clip-path polygons force very expensive paints and are often unsupported;
+  // TV panel transparency is handled by tv.css instead.
+  if (document.documentElement.classList.contains('aqua-tizen')) return;
   // Punch an actual transparent hole through the website backgrounds, so the
   // hardware-decoded TextureView behind this transparent WebView is visible.
   // The native video remains independent of EPG and other site rendering.
@@ -327,7 +331,13 @@ function renderNow() {
     ? 'Загружаем телепрограмму…' : 'Программа пока недоступна');
   // The fullscreen info bar always reflects the PLAYING stream, even when
   // keyboard focus is browsing a different channel in the guide.
-  el('infoBarLogo').innerHTML = playingChannel ? logoMarkup(playingChannel, 'infobar-logo') : '';
+  // Preserve the existing logo DOM when EPG/focus changes to avoid image
+  // reloads and flicker on slow Tizen televisions.
+  const logoKey = playingChannel ? playingChannel.id : '';
+  if (el('infoBarLogo').dataset.channelId !== logoKey) {
+    el('infoBarLogo').dataset.channelId = logoKey;
+    el('infoBarLogo').innerHTML = playingChannel ? logoMarkup(playingChannel, 'infobar-logo') : '';
+  }
   el('infoBarName').textContent = playingChannel?.name || 'AQUA TV';
   el('infoBarNow').textContent = titleOf(playing);
   el('infoBarNext').textContent = nextProgram(playingChannel, now)?.title || 'Следующая передача неизвестна';
