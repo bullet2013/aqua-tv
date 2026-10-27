@@ -263,7 +263,7 @@ function tickLiveEPG() {
   // EPG titles/times switch automatically at the exact programme boundary.
   if (now >= selectedBoundaryAt || (state.guideOpen && now >= listBoundaryAt)) {
     renderNow();
-    if (state.guideOpen) { renderChannels(); renderSchedule(); updateProgramFocus(); if (state.popupOpen) closeProgramPopup(); }
+    if (state.guideOpen) { if (!document.documentElement.classList.contains('aqua-tizen')) renderChannels(); renderSchedule(); updateProgramFocus(); if (state.popupOpen) closeProgramPopup(); }
   }
   (state.guideOpen ? el('guideView') : el('fullscreenInfoBar')).querySelectorAll('.epg-progress').forEach(bar => {
     const { epgStart, epgStop } = bar.dataset;
@@ -512,7 +512,7 @@ function renderSchedule() {
   const channel = guideChannel();
   const now = Date.now();
   // The active programme is shown above, so this list contains only what is next.
-  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, 30);
+  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, document.documentElement.classList.contains('aqua-tizen') ? 12 : 30);
   const panel = el('programList');
   if (!matching.length) {
     panel.innerHTML = `<div class="no-guide">${state.epgStatus === 'loading' || state.epgStatus === 'updating' ? 'Получаем программу передач. Она появится здесь автоматически.' : `Нет ближайших передач для tvg-id «${escapeHtml(channel?.tvgId || 'не указан')}». Диагностика EPG доступна по клавише G.`}</div>`;
