@@ -30,12 +30,15 @@
     if (!player || !msg || !msg.visible) return;
     var rw = document.documentElement.clientWidth || 1920;
     var rh = document.documentElement.clientHeight || 1080;
-    var sw = window.screen.width || rw;
-    var sh = window.screen.height || rh;
+    // Samsung AVPlay display coordinates are always in a 1920x1080 plane.
+    var sw = 1920;
+    var sh = 1080;
     var x = Math.max(0, Math.round(msg.x * sw / rw));
     var y = Math.max(0, Math.round(msg.y * sh / rh));
-    var w = Math.max(1, Math.round(msg.width * sw / rw));
-    var h = Math.max(1, Math.round(msg.height * sh / rh));
+    var w = Math.max(1, Math.min(sw-x, Math.round(msg.width * sw / rw)));
+    var h = Math.max(1, Math.min(sh-y, Math.round(msg.height * sh / rh)));
+    var surface = document.getElementById('avplayObject');
+    if (surface) { surface.style.left=x+'px';surface.style.top=y+'px';surface.style.width=w+'px';surface.style.height=h+'px'; }
     lastRect = [x,y,w,h];
     try { player.setDisplayRect(x, y, w, h); }
     catch (e) { console.log('AVPlay rect: ' + e); }
@@ -55,7 +58,7 @@
     try { player.close(); } catch (ignore2) {}
     try {
       player.open(url);
-      player.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
+      player.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
       player.setListener({
         onbufferingstart:function(){status('buffering','');},
         onbufferingcomplete:function(){status('playing','');},
