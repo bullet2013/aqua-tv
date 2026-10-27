@@ -136,3 +136,21 @@ html.aqua-tizen .infobar-video-info {
 /* Small 1-line rows, no repainting effects on focus. */
 html.aqua-tizen .channel-row {min-height:38px!important}
 html.aqua-tizen .program-list {overscroll-behavior:auto!important}
+
+/* Tizen v5 — compact EPG columns and responsive programme popup. */
+html.aqua-tizen .channel-row {gap:3px!important}
+html.aqua-tizen .row-channel-info {width:34%!important;flex:0 0 34%!important}
+html.aqua-tizen .row-right {width:66%!important;flex:1 1 66%!important}
+html.aqua-tizen .row-scroll-window {overflow:hidden!important}
+html.aqua-tizen .row-scroll-track {display:inline-block!important;white-space:nowrap!important}
+html.aqua-tizen .row-scroll-window:focus .row-scroll-track,
+html.aqua-tizen .channel-row.focused .row-scroll-track {animation:none!important}
+html.aqua-tizen .infobar-timeline {gap:24px!important}
+html.aqua-tizen .infobar-remaining {margin-left:15px!important}
+html.aqua-tizen .program-popup {
+  height:auto!important;max-height:calc(100% - 20px)!important;
+  min-height:0!important;overflow-y:auto!important;
+  box-shadow:none!important;transition:none!important;
+}
+html.aqua-tizen .popup-description {max-height:none!important;overflow-y:visible!important}
+html.aqua-tizen .program-connector {display:none!important}
