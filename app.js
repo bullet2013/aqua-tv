@@ -208,11 +208,14 @@ function safeUrl(value) {
 }
 function logoMarkup(channel, className = 'row-logo') {
   const logo = safeUrl(channel?.logo);
+  // On old Tizen, loading=lazy may never fetch a logo inside a hidden
+  // fullscreen bar. Always eagerly load the fullscreen channel icon.
+  const loading = className === 'infobar-logo' ? 'eager' : 'lazy';
   const fallback = escapeHtml((channel?.name || 'TV').trim().slice(0, 2).toUpperCase());
   if (!logo) return `<span class="${className}"><span class="row-logo-fallback">${fallback}</span></span>`;
   // The fallback must not be painted behind transparent channel artwork.
   // Display it only if the actual image fails to load.
-  return `<span class="${className}"><img loading="lazy" src="${logo}" alt="" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="row-logo-fallback" hidden>${fallback}</span></span>`;
+  return `<span class="${className}"><img loading="${loading}" src="${logo}" alt="" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="row-logo-fallback" hidden>${fallback}</span></span>`;
 }
 function activeChannel() { return state.channels.find(c => c.id === state.activeId) || null; }
 // The guide follows the channel under the pointer/keyboard cursor, not the
@@ -246,9 +249,17 @@ function setProgressBar(node, program, now = Date.now()) {
   node.dataset.epgStop = program ? String(program.stop) : '';
   node.style.width = progress(program, now) + '%';
 }
+let lastTizenEpgTickAt = 0;
 function tickLiveEPG() {
   if (!state.channels.length || document.hidden) return;
   const now = Date.now();
+  // Updating every progress bar every second forces too many style/layout
+  // updates on legacy TV browsers. Boundaries are still checked frequently.
+  if (document.documentElement.classList.contains('aqua-tizen')
+      && now - lastTizenEpgTickAt < 5000
+      && now < selectedBoundaryAt
+      && (!state.guideOpen || now < listBoundaryAt)) return;
+  lastTizenEpgTickAt = now;
   // EPG titles/times switch automatically at the exact programme boundary.
   if (now >= selectedBoundaryAt || (state.guideOpen && now >= listBoundaryAt)) {
     renderNow();
@@ -405,6 +416,11 @@ function syncCategoryConnection() {
 // character count. Small viewports reserve room for EPG text.
 function refreshChannelLayout() {
   const parent = el('channelList');
+  if (document.documentElement.classList.contains('aqua-tizen')) {
+    // Native Samsung TV CSS uses a fixed 42/58 flex row; measuring all channel
+    // names with Canvas on every EPG refresh is expensive and unnecessary.
+    return;
+  }
   if (!parent || !state.channels.length || !parent.clientWidth) return;
   const reference = parent.querySelector('.row-name');
   const style = reference ? getComputedStyle(reference) : null;
@@ -1330,12 +1346,27 @@ function syncChannelFocus() {
     row.tabIndex = selected && zoneActive ? 0 : -1;
   });
 }
+let tizenEpgFrame = 0;
+let tizenResetEpgScroll = false;
 function refreshBrowsedEPG(resetScroll = false) {
-  // Only programme DOM changes; do not restart or move the playing video.
-  // A DIFFERENT browsed channel always starts its future schedule at the top.
+  // Keep channel focus immediate; coalesce EPG DOM work into at most one
+  // frame when several remote presses arrive in a burst.
   if (resetScroll) {
     state.focusedProgramIndex = 0;
     closeProgramPopup();
+  }
+  if (document.documentElement.classList.contains('aqua-tizen')) {
+    tizenResetEpgScroll = tizenResetEpgScroll || resetScroll;
+    if (tizenEpgFrame) return;
+    tizenEpgFrame = requestAnimationFrame(() => {
+      tizenEpgFrame = 0;
+      renderNow();
+      renderSchedule();
+      if (tizenResetEpgScroll) el('programList').scrollTop = 0;
+      tizenResetEpgScroll = false;
+      updateProgramFocus();
+    });
+    return;
   }
   renderNow();
   renderSchedule();
