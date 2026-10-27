@@ -36,6 +36,12 @@ jobs:
         env:
           AQUA_EPG_URL: ${{ vars.AQUA_EPG_URL }}
         run: node tools/epg-update.mjs
+      - name: Собрать облегчённую телепрограмму для Tizen
+        run: |
+          test -s epg.xml.gz
+          node tools/epg-tv-lite.mjs
+          test -s epg-tv.xml.gz
+          test -d epg-tv-descriptions
       - name: Собрать отдельную тестовую версию сайта для старых WebView
         shell: bash
         run: |
