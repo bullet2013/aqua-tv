@@ -25,6 +25,23 @@
     if (window.AquaNative && window.AquaNative.onStatus)
       window.AquaNative.onStatus(type, message || '', width || 0, height || 0);
   }
+  function reportVideoSize() {
+    if (!player) return;
+    try {
+      var tracks = player.getCurrentStreamInfo();
+      for (var i=0;i<tracks.length;i++) {
+        var item=tracks[i], details;
+        if (String(item.type).toUpperCase().indexOf('VIDEO')<0) continue;
+        try { details=JSON.parse(item.extra_info); } catch(ignore) { continue; }
+        var width=Number(details.Width || details.width || 0);
+        var height=Number(details.Height || details.height || 0);
+        if (width>0 && height>0) {
+          status('resolution','',width,height);
+          return;
+        }
+      }
+    } catch(ignore2) {}
+  }
   var lastRect = null;
   function position(msg) {
     if (!player || !msg || !msg.visible) return;
@@ -61,13 +78,15 @@
       player.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
       player.setListener({
         onbufferingstart:function(){status('buffering','');},
-        onbufferingcomplete:function(){status('playing','');},
+        onbufferingcomplete:function(){status('playing','');reportVideoSize();},
         onstreamcompleted:function(){status('error','Трансляция завершилась');},
-        onerror:function(code){status('error','AVPlay: '+code);}
+        onerror:function(code){status('error','AVPlay: '+code);},
+        onstreamplayready:function(){reportVideoSize();},
+        onevent:function(type){if (String(type).indexOf('RESOLUTION_CHANGED')>=0) reportVideoSize();}
       });
       player.prepareAsync(function () {
         if (token !== generation) return;
-        try { if(lastRect) player.setDisplayRect(lastRect[0],lastRect[1],lastRect[2],lastRect[3]); player.play(); status('playing',''); } 
+        try { if(lastRect) player.setDisplayRect(lastRect[0],lastRect[1],lastRect[2],lastRect[3]); player.play(); status('playing','');reportVideoSize(); } 
         catch (e) { status('error',String(e)); }
       },function (error) { if(token === generation) status('error','AVPlay: '+error); });
     } catch (e) { status('error',String(e)); }
