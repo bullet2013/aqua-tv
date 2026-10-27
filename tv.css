@@ -1,0 +1,30 @@
+/* AQUA TV shared Samsung/Tizen TV stylesheet; the original website UI stays intact. */
+html.aqua-tizen .guide-layout{display:flex!important;flex-direction:row!important;gap:10px!important;height:100%!important;padding:10px!important;min-height:0!important}
+html.aqua-tizen .channels-panel{width:57%!important;flex:0 0 57%!important;min-width:0!important;min-height:0!important;overflow:hidden!important}
+html.aqua-tizen .right-panel{width:43%!important;flex:1 1 43%!important;min-width:0!important;min-height:0!important;display:flex!important;flex-direction:column!important;background:transparent!important;border:0!important;box-shadow:none!important;overflow:hidden!important}
+html.aqua-tizen .right-panel:before{display:none!important}
+html.aqua-tizen .channel-row{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;min-height:42px!important;padding:4px 7px!important;gap:9px!important}
+html.aqua-tizen .row-channel-info{width:42%!important;flex:0 0 42%!important;min-width:0!important;display:flex!important;flex-direction:row!important;align-items:center!important}
+html.aqua-tizen .row-right{width:58%!important;flex:1 1 58%!important;min-width:0!important;margin-left:0!important;display:flex!important;flex-direction:row!important;align-items:center!important;overflow:hidden!important}
+html.aqua-tizen .row-scroll-window{min-width:0!important;flex:1!important;overflow:hidden!important}
+html.aqua-tizen .row-scroll-track{white-space:nowrap!important}
+html.aqua-tizen .row-bar{flex:0 0 27px!important;width:27px!important}
+html.aqua-tizen .preview-slot{position:relative!important;flex:0 0 auto!important;width:100%!important;height:auto!important;aspect-ratio:16/9;min-height:0!important;background:transparent!important;border:3px solid #fff!important;border-radius:10px!important;box-sizing:border-box!important}
+html.aqua-tizen .preview-slot .video-shell{height:100%!important;background:transparent!important}
+html.aqua-tizen .preview-meta{background:rgba(245,252,255,.96)!important;padding:6px!important;border-radius:10px!important;flex:0 0 auto!important}
+html.aqua-tizen .program-list{background:rgba(245,252,255,.96)!important;border-radius:10px!important;min-height:0!important;flex:1 1 auto!important;overflow-y:auto!important}
+html.aqua-tizen .guide-view,html.aqua-tizen .fullscreen-stage,html.aqua-tizen .video-shell,html.aqua-tizen .preview-slot{background:transparent!important}
+html.aqua-tizen .guide-view:before{display:none!important}
+html.aqua-tizen .video-shell video,html.aqua-tizen .player-placeholder{display:none!important}
+html.aqua-tizen .fullscreen-infobar{padding:22px 30px 28px!important;gap:22px!important;min-height:145px!important}
+html.aqua-tizen .infobar-logo{width:86px!important;height:86px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+html.aqua-tizen .infobar-logo img{display:block!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important}
+html.aqua-tizen .infobar-channel{font-size:29px!important}
+html.aqua-tizen .infobar-now{font-size:22px!important}
+html.aqua-tizen .infobar-next{font-size:17px!important}
+html.aqua-tizen .infobar-resolution,html.aqua-tizen .infobar-quality{font-size:16px!important}
+html.aqua-tizen .schedule-row{display:flex!important;align-items:center!important}
+html.aqua-tizen .schedule-time{flex:0 0 57px!important}
+html.aqua-tizen .schedule-copy{flex:1!important;min-width:0!important}
+html.aqua-tizen .row-name-track,html.aqua-tizen .row-scroll-track{animation:none!important;will-change:auto!important}
+html.aqua-tizen .channels-panel,html.aqua-tizen .right-panel,html.aqua-tizen .channel-row{backdrop-filter:none!important;transition:none!important}
