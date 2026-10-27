@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var player = window.webapis && window.webapis.avplay;
+  document.documentElement.className += ' aqua-tizen aqua-legacy-browser';
   function startupError(text) {
     var message = document.getElementById('startupText');
     if (message) message.textContent = text;
@@ -24,6 +25,7 @@
     if (window.AquaNative && window.AquaNative.onStatus)
       window.AquaNative.onStatus(type, message || '', width || 0, height || 0);
   }
+  var lastRect = null;
   function position(msg) {
     if (!player || !msg || !msg.visible) return;
     var rw = document.documentElement.clientWidth || 1920;
@@ -34,6 +36,7 @@
     var y = Math.max(0, Math.round(msg.y * sh / rh));
     var w = Math.max(1, Math.round(msg.width * sw / rw));
     var h = Math.max(1, Math.round(msg.height * sh / rh));
+    lastRect = [x,y,w,h];
     try { player.setDisplayRect(x, y, w, h); }
     catch (e) { console.log('AVPlay rect: ' + e); }
   }
@@ -61,7 +64,7 @@
       });
       player.prepareAsync(function () {
         if (token !== generation) return;
-        try { player.play(); status('playing',''); } 
+        try { if(lastRect) player.setDisplayRect(lastRect[0],lastRect[1],lastRect[2],lastRect[3]); player.play(); status('playing',''); } 
         catch (e) { status('error',String(e)); }
       },function (error) { if(token === generation) status('error','AVPlay: '+error); });
     } catch (e) { status('error',String(e)); }
