@@ -512,7 +512,7 @@ function renderSchedule() {
   const channel = guideChannel();
   const now = Date.now();
   // The active programme is shown above, so this list contains only what is next.
-  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, document.documentElement.classList.contains('aqua-tizen') ? 12 : 30);
+  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, document.documentElement.classList.contains('aqua-tizen') ? 10 : 30);
   const panel = el('programList');
   if (!matching.length) {
     panel.innerHTML = `<div class="no-guide">${state.epgStatus === 'loading' || state.epgStatus === 'updating' ? 'Получаем программу передач. Она появится здесь автоматически.' : `Нет ближайших передач для tvg-id «${escapeHtml(channel?.tvgId || 'не указан')}». Диагностика EPG доступна по клавише G.`}</div>`;
@@ -1502,19 +1502,64 @@ function repositionProgramPopup() {
     connector.style.width = `${width}px`;
   }
 }
+let tizenDescCache = Object.create(null);
+function tizenDescriptionKey(id) {
+  let hash=2166136261;
+  for(let i=0;i<id.length;i++) hash=Math.imul(hash ^ id.charCodeAt(i),16777619);
+  return (hash>>>0).toString(16);
+}
+async function loadTizenDescription(programme) {
+  const channel=guideChannel();
+  if (!channel || !channel.tvgId) return;
+  const channelId=channel.tvgId.toLowerCase().trim();
+  const cacheKey=tizenDescriptionKey(channelId);
+  const programKey=String(programme.start)+'|'+String(programme.stop);
+  try {
+    if (!tizenDescCache[cacheKey]) {
+      const base=APP_CONFIG.epgDescriptionsUrl || 'https://bullet2013.github.io/aqua-tv/epg-tv-descriptions/';
+      const reply=await fetch(base+cacheKey+'.json');
+      if(!reply.ok)throw Error('HTTP '+reply.status);
+      const data=await reply.json();
+      if (data.id !== channelId)throw Error('EPG id mismatch');
+      tizenDescCache=Object.create(null);
+      tizenDescCache[cacheKey]=data.programmes || {};
+    }
+    if(state.popupOpen && guideChannel()?.tvgId?.toLowerCase().trim()===channelId &&
+        selectedProgramme()?.start===programme.start) {
+      el('popupDescription').textContent=xmlEntities(tizenDescCache[cacheKey][programKey] || '').trim() || 'Описание передачи отсутствует в телегиде.';
+      fitTizenPopup();
+    }
+  } catch(error) {
+    if(state.popupOpen && selectedProgramme()?.start===programme.start)
+      el('popupDescription').textContent='Описание недоступно.';
+  }
+}
+function fitTizenPopup() {
+  if (!document.documentElement.classList.contains('aqua-tizen')) return;
+  const popup=el('programPopup');
+  const panel=document.querySelector('.channels-panel');
+  if (!panel || popup.hidden) return;
+  popup.style.height='auto';
+  popup.style.maxHeight=Math.max(130,panel.clientHeight-20)+'px';
+  el('popupDescription').style.maxHeight='none';
+  popup.style.overflowY='auto';
+  repositionProgramPopup();
+}
 function openProgramPopup() {
   const programme = selectedProgramme();
   if (!programme) { toast('Для этой передачи нет данных телегида'); return; }
   el('popupTag').textContent = state.focusedProgramIndex === 0 ? 'СЕЙЧАС В ЭФИРЕ' : 'ДАЛЕЕ В ЭФИРЕ';
   el('popupTitle').textContent = programme.title;
   el('popupTime').textContent = `${timeRange(programme)} · ${guideChannel()?.name || 'Телеканал'}`;
-  el('popupDescription').textContent = programme.desc?.trim() || 'Описание передачи отсутствует в телегиде.';
+  el('popupDescription').textContent = programme.desc?.trim() || (document.documentElement.classList.contains('aqua-tizen') ? 'Загружаем описание…' : 'Описание передачи отсутствует в телегиде.');
+  if (document.documentElement.classList.contains('aqua-tizen')) loadTizenDescription(programme);
   state.popupOpen = true;
   el('programPopup').hidden = false;
   document.querySelector('.channels-panel')?.classList.add('popup-visible');
   document.querySelector('.right-panel')?.classList.add('popup-target-active');
   updateProgramFocus();
-  repositionProgramPopup();
+  if (document.documentElement.classList.contains('aqua-tizen')) fitTizenPopup();
+  else repositionProgramPopup();
 }
 function switchNavigationZone(zone) {
   if (zone === 'categories') { openCategoryMenu(); return; }
@@ -1787,6 +1832,10 @@ function wireEvents() {
       if (!el('epgPanel').hidden) { event.preventDefault(); toggleEPGPanel(false); return; }
       if (!diagPanel.hidden) { event.preventDefault(); toggleDiagnostics(false); return; }
       event.preventDefault();
+      if (document.documentElement.classList.contains('aqua-tizen') && state.guideOpen) {
+        nativeSend({type:'exit'});
+        return;
+      }
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       setGuide(!state.guideOpen);
       if (!state.guideOpen && typing) target.blur();
