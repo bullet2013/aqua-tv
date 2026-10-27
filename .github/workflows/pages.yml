@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Tizen fast-mode refresh: keep the stable site files untouched. The preview is a sibling
+          # Tizen video plane + OSD v4: keep the stable site files untouched. The preview is a sibling
           # under /aqua-tv/legacy-test/, sourced from an unmerged feature branch.
           git fetch --depth=1 origin feature/legacy-compatible-web-ui
           mkdir -p .legacy-preview-build/tools legacy-test/dist/legacy
