@@ -94,3 +94,15 @@ body.popup-active #details{overflow-y:auto!important}
 .row-epg-next{color:#8aacc3!important}
 #fontChoices{overflow-x:scroll!important}
 .font-choice.selected{background:#4bb7f5!important;border-color:#006fa9!important}
+
+/* FAST v8: only the row outline for channel focus; only programme panel outline for right focus. */
+.row.selected:not(.programme-focus){background:#aadfff!important;outline:2px solid #0078c8!important;outline-offset:-2px!important}
+.row.selected:not(.programme-focus) .channel-name,
+.row.selected:not(.programme-focus) .row-epg-combined,
+.row.selected:not(.programme-focus) .row-epg-marquee{outline:none!important;border:0!important;background:transparent!important}
+.row.selected.programme-focus{background:#aadfff!important;outline:2px solid #0078c8!important;outline-offset:-2px!important}
+.row.selected.programme-focus .channel-name{outline:none!important;border:0!important;background:transparent!important}
+.row.selected.programme-focus .row-epg-combined{background:#89cafa!important;outline:2px solid #0078c8!important;outline-offset:-2px!important}
+.epg-current{color:#174e6e!important}
+.epg-following{color:#e8faff!important;font-weight:600!important;text-shadow:0 1px 1px #387eaa}
+.epg-separator{color:#6b9ebd!important}

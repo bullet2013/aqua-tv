@@ -38,7 +38,7 @@ function allRows(){
     logo.src=c.logo||'';logo.onerror=function(){this.style.visibility='hidden';};
     add(r,'span','channel-name',c.name);
     // A single flex row: icon, channel, now, next, progress (fixed widths).
-    var epg=add(r,'div','row-epg-combined');add(epg,'span','row-epg-marquee','');
+    var epg=add(r,'div','row-epg-combined');var marquee=add(epg,'span','row-epg-marquee','');add(marquee,'span','epg-current','');add(marquee,'span','epg-separator','  ·  ');add(marquee,'span','epg-following','');
     var track=add(r,'div','row-epg-track');add(track,'div','row-epg-fill');
     r.setAttribute('data-id',String(channelIdx(c)));chunk.appendChild(r);
   }
@@ -48,9 +48,10 @@ function updateRows(scroll){
   var arr=list(),nodes=$('rows').children,now=Date.now();
   for(var i=0;i<nodes.length;i++){
     var c=arr[i],r=nodes[i],p=current(c),n=next(c);
-    var combined=(p?p[2]:'Нет программы')+'  ·  '+(n?n[2]:'—');
     var currentText=r.children[2].firstChild,fill=r.children[3].firstChild;
-    if(currentText.textContent!==combined){currentText.textContent=combined;currentText.title=combined;}
+    var nowText=p?p[2]:'Нет программы',nextText=n?n[2]:'—';
+    if(currentText.children[0].textContent!==nowText)currentText.children[0].textContent=nowText;
+    if(currentText.children[2].textContent!==nextText)currentText.children[2].textContent=nextText;
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
     var width=pct.toFixed(0)+'%';
     if(fill.style.width!==width)fill.style.width=width;
