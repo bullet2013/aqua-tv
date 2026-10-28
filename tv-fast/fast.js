@@ -4,6 +4,10 @@ var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='';
 var $=function(id){return document.getElementById(id);};
 var el=$;
+// Older widgets keep the OSD inside #full. Move it once at startup so its
+// viewport positioning never depends on that legacy container's geometry.
+var osd=$('osd');
+if(osd&&osd.parentNode!==document.body)document.body.appendChild(osd);
 var tv=!!(window.webapis && window.webapis.avplay);
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
@@ -196,6 +200,7 @@ $('rows').addEventListener('click',function(e){var r=e.target;while(r&&r!==$('ro
 $('current').addEventListener('click',function(){zone='programmes';showFocus=0;details();});
 $('upcoming').addEventListener('click',function(e){var n=e.target;while(n&&n!==$('upcoming')&&!n.getAttribute('data-index'))n=n.parentNode;if(n&&n.getAttribute('data-index')){zone='programmes';showFocus=Number(n.getAttribute('data-index'));details();}});
 $('full').addEventListener('click',function(){mode(true);});
+$('osd').addEventListener('click',function(){mode(true);});
 $('preview').addEventListener('click',function(){mode(false);});
 function boot(){
   fetchJson(base+'tv-fast/channels.json',function(data){
