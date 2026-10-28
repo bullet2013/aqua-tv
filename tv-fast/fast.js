@@ -33,10 +33,10 @@ function allRows(){
     var c=arr[i],r=make('div','row'),logo=add(r,'img','logo');
     logo.src=c.logo||'';logo.onerror=function(){this.style.visibility='hidden';};
     add(r,'span','channel-name',c.name);
-    var epg=add(r,'div','channel-epg');
-    add(epg,'div','epg-now','');
-    var track=add(epg,'div','epg-track');add(track,'div','epg-fill');
-    add(epg,'div','epg-next','');
+    // A single flex row: icon, channel, now, next, progress (fixed widths).
+    add(r,'span','row-epg-now','');
+    add(r,'span','row-epg-next','');
+    var track=add(r,'div','row-epg-track');add(track,'div','row-epg-fill');
     r.setAttribute('data-id',String(channelIdx(c)));chunk.appendChild(r);
   }
   parent.appendChild(chunk);updateRows(true);
@@ -44,14 +44,17 @@ function allRows(){
 function updateRows(scroll){
   var arr=list(),nodes=$('rows').children,now=Date.now();
   for(var i=0;i<nodes.length;i++){
-    var c=arr[i],r=nodes[i],p=current(c),n=next(c),area=r.children[2];
-    var name=p?p[2]:'Программа недоступна';
-    if(area.children[0].textContent!==name)area.children[0].textContent=name;
-    var nextText='Далее: '+(n?n[2]:'—');
-    if(area.children[2].textContent!==nextText)area.children[2].textContent=nextText;
+    var c=arr[i],r=nodes[i],p=current(c),n=next(c);
+    var nowLabel='Сейчас: '+(p?p[2]:'нет программы');
+    var nextLabel='Далее: '+(n?n[2]:'—');
+    var currentText=r.children[2],upcomingText=r.children[3],fill=r.children[4].firstChild;
+    if(currentText.textContent!==nowLabel){currentText.textContent=nowLabel;currentText.title=nowLabel;}
+    if(upcomingText.textContent!==nextLabel){upcomingText.textContent=nextLabel;upcomingText.title=nextLabel;}
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
-    area.children[1].firstChild.style.width=pct.toFixed(1)+'%';
-    r.className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
+    var width=pct.toFixed(0)+'%';
+    if(fill.style.width!==width)fill.style.width=width;
+    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
+    if(r.className!==className)r.className=className;
   }
   if(scroll){var idx=arr.indexOf(channels[focus]);if(idx>=0&&nodes[idx]){var n=nodes[idx],s=$('rows');var top=n.offsetTop;if(top<s.scrollTop)s.scrollTop=top;else if(top+n.offsetHeight>s.scrollTop+s.clientHeight)s.scrollTop=top+n.offsetHeight-s.clientHeight;}}
 }
@@ -66,8 +69,16 @@ function navFocus(){
   }
 }
 function categoryMenu(){
-  $('cats').innerHTML='';for(var i=0;i<groups.length;i++){var node=add($('cats'),'div','cat'+(groups[i]===chosenGroup?' active':''),groups[i]);node.setAttribute('data-group',groups[i]);}
-  var entry=add($('cats'),'div','cat settings-entry'+(catFocus===groups.length?' active':''),'⚙ Размер шрифта');entry.setAttribute('data-settings','true');
+  // The highlighted item is the remote cursor, not the saved category.
+  var parent=$('cats');parent.innerHTML='';
+  for(var i=0;i<groups.length;i++){
+    var node=add(parent,'div','cat'+(i===catFocus?' active':''),groups[i]);
+    node.setAttribute('data-group',groups[i]);
+    node.setAttribute('aria-selected',String(i===catFocus));
+  }
+  var entry=add(parent,'div','cat settings-entry'+(catFocus===groups.length?' active':''),'⚙ Размер шрифта');
+  entry.setAttribute('data-settings','true');
+  entry.setAttribute('aria-selected',String(catFocus===groups.length));
 }
 function renderRight(){
   var c=channels[focus];if(!c)return;
@@ -90,7 +101,7 @@ function programme(){return showFocus===0?current(channels[focus]):shows[showFoc
 function descHash(id){var h=2166136261;for(var i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return (h>>>0).toString(16);}
 function details(){
   var c=channels[focus],p=programme();if(!p)return;
-  popup=true;visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0])+'–'+fmt(p[1])+' · '+c.name);text('detailBody','Загружаем описание…');
+  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0])+'–'+fmt(p[1])+' · '+c.name);text('detailBody','Загружаем описание…');
   var token=++descriptionToken,id=c.id,key=p[0]+'|'+p[1];
   fetchJson(base+'epg-tv-descriptions/'+descHash(id)+'.json',function(d){if(token!==descriptionToken||!popup)return;text('detailBody',d.id===id&&d.programmes&&d.programmes[key]?decodeXml(d.programmes[key]):'Описание отсутствует.');},function(){if(token===descriptionToken&&popup)text('detailBody','Описание недоступно.');});
 }
@@ -103,8 +114,11 @@ function info(){
   if(p){var time=Date.now(),width=Math.round(Math.max(0,Math.min(100,100*(time-p[0])/(p[1]-p[0]))));$('osdProgress').style.width=width+'%';text('osdLeft',Math.ceil(Math.max(0,p[1]-time)/60000)+' мин');}else{$('osdProgress').style.width='0%';text('osdLeft','');}
 }
 function showOsd(){
-  info();$('osd').className='show';if(osdTimer)clearTimeout(osdTimer);
-  osdTimer=setTimeout(function(){$('osd').className='';},5000);
+  // Keep the OSD visible in fullscreen. The old five-second timeout made
+  // users think it was missing and hid the stream resolution entirely.
+  info();
+  if(osdTimer){clearTimeout(osdTimer);osdTimer=null;}
+  $('osd').className='show';
 }
 function rect(){
   var preview=showGuide?$('preview'):null;
@@ -135,7 +149,7 @@ function tune(index){
 }
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
-  if(popup){popup=false;descriptionToken++;hide('details');return;}
+  if(popup){popup=false;descriptionToken++;document.body.classList.remove('popup-active');hide('details');return;}
   if(menu){menu=false;hide('categories');return;}
   if(showGuide){send({type:'exit'});return;}
   mode(true);
@@ -174,7 +188,7 @@ function key(k){
 var catFocus=0;
 window.AquaFast={key:key,onStatus:function(type,msg,w,h){
   if((type==='resolution'||type==='playing')&&w>0&&h>0){videoSize=w+' × '+h;text('resolution',videoSize);}
-  if(type==='error')text('loading','AVPlay: '+msg);
+  if(type==='error')console.warn('AVPlay:',msg);
 }};
 document.addEventListener('keydown',function(e){var k=e.key;if(k==='Esc')k='Escape';if(k==='Escape'||k==='Backspace'||k==='Enter'||k.indexOf('Arrow')===0){e.preventDefault();key(k);}});
 window.addEventListener('resize',function(){rect();});

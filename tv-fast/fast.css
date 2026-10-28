@@ -40,3 +40,28 @@ html,body{min-width:0!important;max-width:100%!important}
 .font-choice{padding:12px 15px;background:#fff;font-size:20px}
 .font-choice.selected{background:#87d1f9;border:2px solid #008bdb;padding:10px 13px}
 .settings-entry{border-top:2px solid #badff1;margin-top:12px}
+
+/* FAST v4: fixed columns in one row; no layout movement on focus. */
+.row,.row.selected,.row.playing{display:-webkit-flex!important;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;height:50px!important;min-height:50px!important;max-height:50px!important;gap:7px!important;overflow:hidden!important}
+.row .logo{width:34px!important;flex:0 0 34px!important}
+.row .channel-name{width:24%!important;flex:0 0 24%!important;min-width:0!important;max-width:24%!important}
+.row-epg-now,.row-epg-next{display:block!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;min-width:0!important;font-size:calc(var(--tv-font,18px) * .85)!important}
+.row-epg-now{width:32%!important;flex:0 0 32%!important;font-weight:bold}
+.row-epg-next{width:0!important;flex:1 1 0!important;color:#547d96}
+.row-epg-track{width:64px!important;flex:0 0 64px!important;height:5px!important;overflow:hidden!important;background:#bddbea!important}
+.row-epg-fill{height:100%!important;width:0;background:#0b95d2!important}
+#full{z-index:1!important}
+#osd.show{display:-webkit-flex!important;display:flex!important;position:absolute!important;bottom:0!important;left:0!important;right:0!important;z-index:20!important;visibility:visible!important;opacity:1!important;background:#061c35!important}
+#osdName{font-size:calc(var(--tv-font,18px) * 1.8)!important}
+#osdNow{font-size:calc(var(--tv-font,18px) * 1.45)!important}
+#osdNext{font-size:calc(var(--tv-font,18px) * 1.1)!important}
+#resolution{font-size:19px!important;min-width:155px!important;flex:0 0 155px!important;text-align:right!important}
+#osdProgressRow{gap:25px!important}
+#osdLeft{margin-left:17px!important}
+#categories{z-index:12!important}
+.cat,.cat.active{border:2px solid transparent!important;padding:11px!important;box-sizing:border-box!important}
+.cat.active,.cat[aria-selected="true"]{background:#72c6fa!important;color:#053f68!important;border-color:#006cae!important;font-weight:bold!important}
+#details{z-index:40!important}
+body.popup-active #rows,body.popup-active #upcoming{overflow-y:hidden!important}
+body.popup-active #channels{overflow:visible!important}
+body.popup-active #details{overflow-y:auto!important}
