@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 var player=window.webapis&&window.webapis.avplay;
-var lastRect=[0,0,1920,1080],generation=0;
+var lastRect=[0,0,1920,1080],generation=0,hasRect=false;
 var host='31.41.12.104';
 function status(type,message,w,h){if(window.AquaFast&&window.AquaFast.onStatus)window.AquaFast.onStatus(type,message||'',w||0,h||0);}
 function resolution(){try{var tracks=player.getCurrentStreamInfo();for(var i=0;i<tracks.length;i++){if(String(tracks[i].type).toUpperCase().indexOf('VIDEO')<0)continue;var p=JSON.parse(tracks[i].extra_info),w=Number(p.Width||p.width||0),h=Number(p.Height||p.height||0);if(w>0&&h>0){status('resolution','',w,h);return;}}}catch(e){}}
@@ -12,8 +12,10 @@ function rect(m){
  var x=Math.max(0,Math.round(Number(m.x)*1920/width)),y=Math.max(0,Math.round(Number(m.y)*1080/height));
  var w=Math.max(1,Math.min(1920-x,Math.round(Number(m.width)*1920/width)));
  var h=Math.max(1,Math.min(1080-y,Math.round(Number(m.height)*1080/height)));
- var n=[x,y,w,h];if(n.join(',')===lastRect.join(','))return;
- lastRect=n;
+ var n=[x,y,w,h];if(hasRect&&n.join(',')===lastRect.join(','))return;
+ lastRect=n;hasRect=true;
+ var surface=document.getElementById('avplayObject');
+ if(surface){surface.style.left=Number(m.x)+'px';surface.style.top=Number(m.y)+'px';surface.style.width=Number(m.width)+'px';surface.style.height=Number(m.height)+'px';}
  try{player.setDisplayRect(x,y,w,h);}catch(e){status('error',String(e));}
 }
 function play(url){
