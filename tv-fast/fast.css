@@ -114,3 +114,11 @@ body.popup-active #details{overflow-y:auto!important}
 body.focus-programmes .row.selected{outline:none!important}
 #current.programme-selected,#upcoming .programme-selected{background:#aadfff!important;outline:3px solid #0078c8!important;outline-offset:-3px!important}
 .epg-following{color:#5487a9!important;font-weight:normal!important;text-shadow:none!important}
+
+/* v10: stable marquee with JS-driven constant px/s and a 16:9 preview. */
+.row-epg-marquee{animation:none!important;transition:none!important;will-change:transform}
+#channels{width:62%!important;max-width:62%!important;flex:0 0 62%!important;-webkit-flex:0 0 62%!important}
+#right{width:38%!important;max-width:38%!important;flex:1 1 0!important;-webkit-flex:1 1 0!important}
+#preview{height:auto!important;aspect-ratio:16/9!important;flex:0 0 auto!important}
+.speed-row{padding:12px;margin:10px 0;background:#fff;border:2px solid transparent;font-size:21px}
+.speed-row.active{background:#aadfff;border-color:#0078c8}
