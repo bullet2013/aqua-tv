@@ -2,7 +2,7 @@
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
         id="https://bullet2013.github.io/aqua-tv/tizen"
-        version="0.1.0"
+        version="0.1.1"
         viewmodes="fullscreen">
   <name>AQUA TV</name>
   <description>IPTV player with native Samsung AVPlay and the AQUA TV website UI</description>
@@ -21,3 +21,4 @@
   <access origin="*" subdomains="true"/>
   <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; media-src * blob:</tizen:content-security-policy>
 </widget>
+
