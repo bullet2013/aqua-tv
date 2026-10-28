@@ -5,6 +5,14 @@ var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup=
 var $=function(id){return document.getElementById(id);};
 var el=$;
 var tv=!!(window.webapis && window.webapis.avplay);
+var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26],fontSelected=2;
+try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
+function applyFont(){fontPx=Math.max(14,Math.min(26,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');}
+applyFont();
+function openSettings(){settings=true;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');}
+function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));}}
+function chooseFont(){fontPx=fontOptions[fontSelected];applyFont();try{localStorage.setItem('aqua-fast-font',String(fontPx));}catch(ignore){}settings=false;hide('fontSettings');}
+
 function hide(n){$(n).className='hidden';}
 function visible(n){$(n).className='';}
 function text(n,val){if($(n).textContent!==String(val))$(n).textContent=String(val);}
@@ -24,17 +32,25 @@ function allRows(){
   for(var i=0;i<arr.length;i++){
     var c=arr[i],r=make('div','row'),logo=add(r,'img','logo');
     logo.src=c.logo||'';logo.onerror=function(){this.style.visibility='hidden';};
-    add(r,'span','channel-name',c.name);add(r,'span','epg-title','');
+    add(r,'span','channel-name',c.name);
+    var epg=add(r,'div','channel-epg');
+    add(epg,'div','epg-now','');
+    var track=add(epg,'div','epg-track');add(track,'div','epg-fill');
+    add(epg,'div','epg-next','');
     r.setAttribute('data-id',String(channelIdx(c)));chunk.appendChild(r);
   }
   parent.appendChild(chunk);updateRows(true);
 }
 function updateRows(scroll){
-  var arr=list(),nodes=$('rows').children;
+  var arr=list(),nodes=$('rows').children,now=Date.now();
   for(var i=0;i<nodes.length;i++){
-    var c=arr[i],r=nodes[i],p=current(c),label=r.children[2];
+    var c=arr[i],r=nodes[i],p=current(c),n=next(c),area=r.children[2];
     var name=p?p[2]:'Программа недоступна';
-    if(label.textContent!==name)label.textContent=name;
+    if(area.children[0].textContent!==name)area.children[0].textContent=name;
+    var nextText='Далее: '+(n?n[2]:'—');
+    if(area.children[2].textContent!==nextText)area.children[2].textContent=nextText;
+    var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
+    area.children[1].firstChild.style.width=pct.toFixed(1)+'%';
     r.className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
   }
   if(scroll){var idx=arr.indexOf(channels[focus]);if(idx>=0&&nodes[idx]){var n=nodes[idx],s=$('rows');var top=n.offsetTop;if(top<s.scrollTop)s.scrollTop=top;else if(top+n.offsetHeight>s.scrollTop+s.clientHeight)s.scrollTop=top+n.offsetHeight-s.clientHeight;}}
@@ -51,6 +67,7 @@ function navFocus(){
 }
 function categoryMenu(){
   $('cats').innerHTML='';for(var i=0;i<groups.length;i++){var node=add($('cats'),'div','cat'+(groups[i]===chosenGroup?' active':''),groups[i]);node.setAttribute('data-group',groups[i]);}
+  var entry=add($('cats'),'div','cat settings-entry'+(catFocus===groups.length?' active':''),'⚙ Размер шрифта');entry.setAttribute('data-settings','true');
 }
 function renderRight(){
   var c=channels[focus];if(!c)return;
@@ -117,6 +134,7 @@ function tune(index){
   if(showGuide){navFocus();renderRight();}else showOsd();
 }
 function back(){
+  if(settings){settings=false;hide('fontSettings');return;}
   if(popup){popup=false;descriptionToken++;hide('details');return;}
   if(menu){menu=false;hide('categories');return;}
   if(showGuide){send({type:'exit'});return;}
@@ -124,10 +142,11 @@ function back(){
 }
 function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
+  if(settings){if(k==='ArrowUp'||k==='ArrowDown'){fontSelected=(fontSelected+(k==='ArrowDown'?1:-1)+fontOptions.length)%fontOptions.length;renderSettings();}else if(k==='Enter'){chooseFont();}return;}
   if(k==='Enter'){
     if(popup){back();return;}
     if(!showGuide){mode(true);return;}
-    if(menu){chosenGroup=groups[catFocus];menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
+    if(menu){if(catFocus===groups.length){openSettings();return;}chosenGroup=groups[catFocus];menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
     if(zone==='channels'){tune(focus);mode(false);return;}
     details();return;
   }
@@ -145,7 +164,7 @@ function key(k){
     if(popup)return;
     var d=k==='ArrowDown'?1:-1;
     if(!showGuide){var id=(active+d+channels.length)%channels.length;tune(id);return;}
-    if(menu){catFocus=(catFocus+d+groups.length)%groups.length;chosenGroup=groups[catFocus];categoryMenu();return;}
+    if(menu){catFocus=(catFocus+d+groups.length+1)%(groups.length+1);categoryMenu();return;}
     if(zone==='channels'){
       var arr=list(),index=arr.indexOf(channels[focus]);
       focus=channelIdx(arr[(index+d+arr.length)%arr.length]);navFocus();renderRight();
@@ -176,5 +195,7 @@ function boot(){
     },function(e){text('current','Ошибка EPG: '+e);});
   },function(error){text('loading','Ошибка плейлиста: '+error);});
 }
+$('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
+setInterval(function(){if(!channels.length)return;if(showGuide){updateRows(false);}else{info();}},15000);
 boot();
 })();
