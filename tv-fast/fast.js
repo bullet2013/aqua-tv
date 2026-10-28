@@ -110,9 +110,10 @@ function mode(open){
 }
 function tune(index){
   if(index<0||!channels[index])return;
+  var changed=active!==index;
   active=index;focus=index;
   try{localStorage.setItem('aqua-fast-channel',String(index));}catch(e){}
-  logoOsd(channels[index]);send({type:'play',url:channels[index].url});
+  logoOsd(channels[index]);if(changed||!tune.started){tune.started=true;send({type:'play',url:channels[index].url});}
   if(showGuide){navFocus();renderRight();}else showOsd();
 }
 function back(){
@@ -127,7 +128,7 @@ function key(k){
     if(popup){back();return;}
     if(!showGuide){mode(true);return;}
     if(menu){chosenGroup=groups[catFocus];menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
-    if(zone==='channels'){mode(false);tune(focus);return;}
+    if(zone==='channels'){tune(focus);mode(false);return;}
     details();return;
   }
   if(k==='ArrowLeft'){
