@@ -122,3 +122,6 @@ body.focus-programmes .row.selected{outline:none!important}
 #preview{height:auto!important;aspect-ratio:16/9!important;flex:0 0 auto!important}
 .speed-row{padding:12px;margin:10px 0;background:#fff;border:2px solid transparent;font-size:21px}
 .speed-row.active{background:#aadfff;border-color:#0078c8}
+
+/* v11: Tizen WebKit compatibility: avoid aspect-ratio, size preview explicitly in JS. */
+#preview{aspect-ratio:auto!important;height:38vh!important;min-height:120px!important;max-height:42vh!important;display:block!important;visibility:visible!important;background:transparent!important}
