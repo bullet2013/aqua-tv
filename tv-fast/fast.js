@@ -55,7 +55,7 @@ function updateRows(scroll){
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
     var width=pct.toFixed(0)+'%';
     if(fill.style.width!==width)fill.style.width=width;
-    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'')+(channelIdx(c)===focus&&zone==='programmes'?' programme-focus':'');
+    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
     if(r.className!==className)r.className=className;
   }
   updateFocusMarquee();
@@ -63,7 +63,7 @@ function updateRows(scroll){
 }
 function navFocus(){
   var nodes=$('rows').children,arr=list();
-  for(var i=0;i<nodes.length;i++)nodes[i].className='row'+(channelIdx(arr[i])===focus?' selected':'')+(channelIdx(arr[i])===active?' playing':'')+(channelIdx(arr[i])===focus&&zone==='programmes'?' programme-focus':'');
+  for(var i=0;i<nodes.length;i++)nodes[i].className='row'+(channelIdx(arr[i])===focus?' selected':'')+(channelIdx(arr[i])===active?' playing':'');
   var idx=arr.indexOf(channels[focus]);
   if(idx>=0&&nodes[idx]){
     var node=nodes[idx],pane=$('rows'),top=node.offsetTop;
@@ -106,9 +106,10 @@ function renderRight(){
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
+  document.body.classList.toggle('focus-programmes',zone==='programmes');
   navFocus();
-  $('current').style.background=zone==='programmes'&&showFocus===0?'#aadfff':'#e5f4fc';
-  var nodes=$('upcoming').children;for(var i=0;i<nodes.length;i++)nodes[i].className='show-row'+(zone==='programmes'&&showFocus===i+1?' selected':'');
+  $('current').className=zone==='programmes'&&showFocus===0?'programme-selected':'';
+  var nodes=$('upcoming').children;for(var i=0;i<nodes.length;i++)nodes[i].className='show-row'+(zone==='programmes'&&showFocus===i+1?' programme-selected':'');
   if(zone==='programmes'&&showFocus>0&&nodes[showFocus-1]){
     var n=nodes[showFocus-1],p=$('upcoming');if(n.offsetTop+n.offsetHeight>p.scrollTop+p.clientHeight)p.scrollTop=n.offsetTop+n.offsetHeight-p.clientHeight;else if(n.offsetTop<p.scrollTop)p.scrollTop=n.offsetTop;
   }
@@ -151,7 +152,7 @@ function mode(open){
   showGuide=open;
   $('guide').className=open?'':'hidden';
   $('full').className=open?'hidden':'';
-  if(open){$('osd').className='';zone='channels';menu=false;hide('categories');navFocus();}
+  if(open){$('osd').className='';zone='channels';document.body.classList.remove('focus-programmes');menu=false;hide('categories');navFocus();}
   else showOsd();
   // No DOM reparenting. Never rebuild channels/EPG here.
   rect();
