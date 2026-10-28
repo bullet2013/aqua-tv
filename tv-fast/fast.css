@@ -68,3 +68,16 @@ body.popup-active #rows,body.popup-active #upcoming{overflow-y:hidden!important}
 body.popup-active #channels{overflow:visible!important}
 body.popup-active #details{overflow-y:auto!important}
 
+
+/* FAST v6: lightweight single EPG text with focus-only horizontal marquee. */
+.row-epg-combined{width:0!important;flex:1 1 0!important;min-width:0!important;overflow:hidden!important;white-space:nowrap!important;font-size:var(--tv-font,18px)!important;position:relative}
+.row-epg-marquee{display:inline-block;white-space:nowrap;min-width:100%;font-size:inherit}
+.row.selected .row-epg-combined{outline:2px solid #087ec0;outline-offset:-2px}
+.row.programme-focus{outline:none!important;background:#e5f4fc!important}
+.row.programme-focus .row-epg-combined{background:#aadfff!important;outline:3px solid #0078c8!important;outline-offset:-3px!important}
+.row.selected:not(.programme-focus) .channel-name{outline:2px solid #0078c8!important;outline-offset:-1px!important;background:#aadfff!important}
+.row.selected .row-epg-marquee{animation:aqua-epg-scroll 13s linear 1.5s infinite alternate!important}
+@keyframes aqua-epg-scroll{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(min(0px,calc(100% - 100vw)))}}
+#fontSettings{width:680px!important;max-width:92%!important}
+#fontChoices{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;gap:6px!important;padding:6px 0 14px!important}
+.font-choice{flex:0 0 auto!important;min-width:64px!important;text-align:center!important}
