@@ -81,3 +81,16 @@ body.popup-active #details{overflow-y:auto!important}
 #fontSettings{width:680px!important;max-width:92%!important}
 #fontChoices{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;gap:6px!important;padding:6px 0 14px!important}
 .font-choice{flex:0 0 auto!important;min-width:64px!important;text-align:center!important}
+
+/* FAST v7: keep selected row blue while the outline follows focus. */
+.row.selected,.row.programme-focus{background:#aadfff!important}
+.row.selected{outline:none!important}
+.row.selected .channel-name{background:transparent!important;outline:none!important}
+.row.selected:not(.programme-focus){outline:2px solid #0078c8!important;outline-offset:-2px!important}
+.row.programme-focus .row-epg-combined{background:#89cafa!important;outline:3px solid #0078c8!important;outline-offset:-3px!important}
+.row.programme-focus .channel-name{outline:none!important}
+.row-epg-combined{position:relative!important}
+.row-epg-marquee{display:inline-block!important;min-width:0!important;width:max-content!important;white-space:nowrap!important;animation:none!important;transition:transform 5s linear!important}
+.row-epg-next{color:#8aacc3!important}
+#fontChoices{overflow-x:scroll!important}
+.font-choice.selected{background:#4bb7f5!important;border-color:#006fa9!important}
