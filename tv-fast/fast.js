@@ -11,7 +11,7 @@ if(osd&&osd.parentNode!==document.body)document.body.appendChild(osd);
 var tv=!!(window.webapis && window.webapis.avplay);
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
-function applyFont(){fontPx=Math.max(14,Math.min(26,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');}
+function applyFont(){fontPx=Math.max(14,Math.min(26,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(192,192+(fontPx-18)*6)+'px';}
 applyFont();
 function openSettings(){settings=true;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');}
 function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));}}
