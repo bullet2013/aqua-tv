@@ -11,14 +11,17 @@ if(osd&&osd.parentNode!==document.body)document.body.appendChild(osd);
 var tv=!!(window.webapis && window.webapis.avplay);
 var marqueeSpeed=65,marqueeDelay=1800,marqueeTimer=null,marqueeFrame=null,marqueeStart=0,marqueeLast=0,marqueeOffset=0,marqueeDirection=-1,marqueeNode=null,marqueeOverflow=0;
 try{marqueeSpeed=Number(localStorage.getItem('aqua-fast-scroll-speed'))||65;}catch(ignore){}
+var speedOptions=[35,65,105],speedNames=['Медленно','Нормально','Быстро'];
+function speedIndex(){var idx=0,diff=Infinity;for(var i=0;i<speedOptions.length;i++){var n=Math.abs(speedOptions[i]-marqueeSpeed);if(n<diff){diff=n;idx=i;}}return idx;}
+marqueeSpeed=speedOptions[speedIndex()];
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
 function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(192,192+(fontPx-18)*6)+'px';}
 applyFont();
 function openSettings(){settings=true;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();}
 function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));if(i===fontSelected){var item=a;}}if(item){var left=item.offsetLeft-p.offsetLeft;p.scrollLeft=Math.max(0,left-(p.clientWidth-item.offsetWidth)/2);}}
-function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=marqueeSpeed+' пикс./сек';}
-function setSpeed(delta){marqueeSpeed=Math.max(20,Math.min(160,marqueeSpeed+delta));try{localStorage.setItem('aqua-fast-scroll-speed',String(marqueeSpeed));}catch(ignore){}updateSpeedLabel();}
+function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=speedNames[speedIndex()];}
+function setSpeed(delta){marqueeSpeed=speedOptions[Math.max(0,Math.min(2,speedIndex()+(delta>0?1:-1)))];try{localStorage.setItem('aqua-fast-scroll-speed',String(marqueeSpeed));}catch(ignore){}updateSpeedLabel();}
 function chooseFont(){fontPx=fontOptions[fontSelected];applyFont();try{localStorage.setItem('aqua-fast-font',String(fontPx));}catch(ignore){}settings=false;hide('fontSettings');}
 
 function hide(n){$(n).className='hidden';}
@@ -159,6 +162,7 @@ function showOsd(){
 }
 function rect(){
   var preview=showGuide?$('preview'):null;
+  if(preview){var w=preview.clientWidth;var h=Math.round(w*9/16);preview.style.height=h+'px';}
   var vw=document.documentElement.clientWidth||1920,vh=document.documentElement.clientHeight||1080;
   if(showGuide){
     var x=preview.getBoundingClientRect();
@@ -194,7 +198,7 @@ function back(){
 }
 function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
-  if(settings){if(k==='ArrowUp'||k==='ArrowDown'){var speed=$('scrollSpeedRow');if(speed)speed.className=k==='ArrowDown'?'speed-row active':'speed-row';return;}if(k==='ArrowLeft'||k==='ArrowRight'){if($('scrollSpeedRow').className.indexOf('active')>=0){setSpeed(k==='ArrowRight'?10:-10);return;}fontSelected=(fontSelected+(k==='ArrowRight'?1:-1)+fontOptions.length)%fontOptions.length;renderSettings();}else if(k==='Enter'){if($('scrollSpeedRow').className.indexOf('active')>=0){settings=false;hide('fontSettings');}else chooseFont();}return;}
+  if(settings){if(k==='ArrowUp'||k==='ArrowDown'){var speed=$('scrollSpeedRow');if(speed)speed.className=k==='ArrowDown'?'speed-row active':'speed-row';return;}if(k==='ArrowLeft'||k==='ArrowRight'){if($('scrollSpeedRow').className.indexOf('active')>=0){setSpeed(k==='ArrowRight'?1:-1);return;}fontSelected=(fontSelected+(k==='ArrowRight'?1:-1)+fontOptions.length)%fontOptions.length;renderSettings();}else if(k==='Enter'){if($('scrollSpeedRow').className.indexOf('active')>=0){settings=false;hide('fontSettings');}else chooseFont();}return;}
   if(k==='Enter'){
     if(popup){back();return;}
     if(!showGuide){mode(true);return;}
