@@ -9,9 +9,9 @@ var el=$;
 var osd=$('osd');
 if(osd&&osd.parentNode!==document.body)document.body.appendChild(osd);
 var tv=!!(window.webapis && window.webapis.avplay);
-var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26],fontSelected=2;
+var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
-function applyFont(){fontPx=Math.max(14,Math.min(26,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(192,192+(fontPx-18)*6)+'px';}
+function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(192,192+(fontPx-18)*6)+'px';}
 applyFont();
 function openSettings(){settings=true;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');}
 function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));}}
@@ -38,8 +38,7 @@ function allRows(){
     logo.src=c.logo||'';logo.onerror=function(){this.style.visibility='hidden';};
     add(r,'span','channel-name',c.name);
     // A single flex row: icon, channel, now, next, progress (fixed widths).
-    add(r,'span','row-epg-now','');
-    add(r,'span','row-epg-next','');
+    var epg=add(r,'div','row-epg-combined');add(epg,'span','row-epg-marquee','');
     var track=add(r,'div','row-epg-track');add(track,'div','row-epg-fill');
     r.setAttribute('data-id',String(channelIdx(c)));chunk.appendChild(r);
   }
@@ -49,22 +48,20 @@ function updateRows(scroll){
   var arr=list(),nodes=$('rows').children,now=Date.now();
   for(var i=0;i<nodes.length;i++){
     var c=arr[i],r=nodes[i],p=current(c),n=next(c);
-    var nowLabel='Сейчас: '+(p?p[2]:'нет программы');
-    var nextLabel='Далее: '+(n?n[2]:'—');
-    var currentText=r.children[2],upcomingText=r.children[3],fill=r.children[4].firstChild;
-    if(currentText.textContent!==nowLabel){currentText.textContent=nowLabel;currentText.title=nowLabel;}
-    if(upcomingText.textContent!==nextLabel){upcomingText.textContent=nextLabel;upcomingText.title=nextLabel;}
+    var combined=(p?p[2]:'Нет программы')+'  ·  '+(n?n[2]:'—');
+    var currentText=r.children[2].firstChild,fill=r.children[3].firstChild;
+    if(currentText.textContent!==combined){currentText.textContent=combined;currentText.title=combined;}
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
     var width=pct.toFixed(0)+'%';
     if(fill.style.width!==width)fill.style.width=width;
-    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
+    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'')+(channelIdx(c)===focus&&zone==='programmes'?' programme-focus':'');
     if(r.className!==className)r.className=className;
   }
   if(scroll){var idx=arr.indexOf(channels[focus]);if(idx>=0&&nodes[idx]){var n=nodes[idx],s=$('rows');var top=n.offsetTop;if(top<s.scrollTop)s.scrollTop=top;else if(top+n.offsetHeight>s.scrollTop+s.clientHeight)s.scrollTop=top+n.offsetHeight-s.clientHeight;}}
 }
 function navFocus(){
   var nodes=$('rows').children,arr=list();
-  for(var i=0;i<nodes.length;i++)nodes[i].className='row'+(channelIdx(arr[i])===focus?' selected':'')+(channelIdx(arr[i])===active?' playing':'');
+  for(var i=0;i<nodes.length;i++)nodes[i].className='row'+(channelIdx(arr[i])===focus?' selected':'')+(channelIdx(arr[i])===active?' playing':'')+(channelIdx(arr[i])===focus&&zone==='programmes'?' programme-focus':'');
   var idx=arr.indexOf(channels[focus]);
   if(idx>=0&&nodes[idx]){
     var node=nodes[idx],pane=$('rows'),top=node.offsetTop;
@@ -95,6 +92,7 @@ function renderRight(){
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
+  navFocus();
   $('current').style.background=zone==='programmes'&&showFocus===0?'#aadfff':'#e5f4fc';
   var nodes=$('upcoming').children;for(var i=0;i<nodes.length;i++)nodes[i].className='show-row'+(zone==='programmes'&&showFocus===i+1?' selected':'');
   if(zone==='programmes'&&showFocus>0&&nodes[showFocus-1]){
@@ -160,7 +158,7 @@ function back(){
 }
 function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
-  if(settings){if(k==='ArrowUp'||k==='ArrowDown'){fontSelected=(fontSelected+(k==='ArrowDown'?1:-1)+fontOptions.length)%fontOptions.length;renderSettings();}else if(k==='Enter'){chooseFont();}return;}
+  if(settings){if(k==='ArrowLeft'||k==='ArrowRight'){fontSelected=(fontSelected+(k==='ArrowRight'?1:-1)+fontOptions.length)%fontOptions.length;renderSettings();}else if(k==='Enter'){chooseFont();}return;}
   if(k==='Enter'){
     if(popup){back();return;}
     if(!showGuide){mode(true);return;}
@@ -171,7 +169,7 @@ function key(k){
   if(k==='ArrowLeft'){
     if(!showGuide){showOsd();return;}
     if(popup)return;
-    if(zone==='programmes'){zone='channels';updateProgrammeFocus();navFocus();return;}
+    if(zone==='programmes'){zone='channels';updateProgrammeFocus();return;}
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
   }
   if(k==='ArrowRight'){
