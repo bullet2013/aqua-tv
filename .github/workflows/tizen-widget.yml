@@ -22,16 +22,16 @@ jobs:
           ET.parse(path/'config.xml')
           for name in ('index.html','bridge.js','config.js'):
               assert (path/name).is_file(), name
-          assert 'window.AquaAndroid' in (path/'bridge.js').read_text()
-          assert 'webapis.avplay' in (path/'bridge.js').read_text()
+          assert 'window.AquaBridge' in (path/'fast-bridge.js').read_text()
+          assert 'webapis.avplay' in (path/'fast-bridge.js').read_text()
           PY
-          node --check tizen/bridge.js
+          node --check tizen/fast-bridge.js
           node --check tizen/config.js
           test $(wc -c < tizen/index.html) -lt 20000
       - name: Package unsigned widget source
         run: |
           cd tizen
-          zip -q -9 ../AQUA-TV-Tizen-UNSIGNED.wgt config.xml index.html bridge.js config.js
+          zip -q -9 ../AQUA-TV-Tizen-UNSIGNED.wgt config.xml index.html fast-bridge.js
           unzip -l ../AQUA-TV-Tizen-UNSIGNED.wgt
           test $(wc -c < ../AQUA-TV-Tizen-UNSIGNED.wgt) -lt 30000
       - uses: actions/upload-artifact@v4
