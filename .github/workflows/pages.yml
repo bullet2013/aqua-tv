@@ -42,6 +42,7 @@ jobs:
           node tools/epg-tv-lite.mjs
           test -s epg-tv.xml.gz
           test -d epg-tv-descriptions
+      # TV FAST v2 video playback and stable channel columns
       - name: Prepare fast Tizen JSON
         run: node tools/tv-fast-data.mjs
       - name: Собрать отдельную тестовую версию сайта для старых WebView
