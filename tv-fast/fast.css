@@ -200,3 +200,14 @@ body.focus-programmes .row.selected{background:#6495ED!important;outline:none!im
 #current.programme-selected,#upcoming .programme-selected{background:#6495ED!important;outline:3px solid #E0FFFF!important;outline-offset:-3px!important}
 #categories{background:#1E90FF!important;border-color:#E0FFFF!important}
 .cat.active,.cat[aria-selected="true"]{background:#6495ED!important;border-color:#E0FFFF!important}
+
+/* v18: exact colours with high-specificity overrides against legacy selected styles. */
+#guide #channels,#guide #rows,#guide #current,#guide #upcoming,#guide #categories{background-color:#4169E1!important}
+#guide #rows .row,#guide #upcoming .show-row{background-color:#4169E1!important}
+#guide #rows .row.selected,#guide #rows .row.selected.playing,
+#guide #upcoming .show-row.programme-selected,#guide #current.programme-selected,
+#guide #categories .cat.active,#guide #categories .cat[aria-selected="true"]{background-color:#6495ED!important}
+#guide #rows .row.selected{outline:2px solid #E0FFFF!important;outline-offset:-2px!important}
+body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!important;outline:none!important}
+#guide #current.programme-selected,#guide #upcoming .show-row.programme-selected{outline:3px solid #E0FFFF!important;outline-offset:-3px!important}
+#guide #rows .row.selected .channel-name,#guide #rows .row.selected .row-epg-combined{background-color:transparent!important}
