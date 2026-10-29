@@ -250,7 +250,8 @@ function key(k){
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
   }
   if(k==='ArrowRight'){
-    if(!showGuide||popup||menu)return;
+    if(!showGuide||popup)return;
+    if(menu){menu=false;hide('categories');zone='channels';navFocus();return;}
     zone='programmes';showFocus=0;updateProgrammeFocus();return;
   }
   if(k==='ArrowUp'||k==='ArrowDown'){
