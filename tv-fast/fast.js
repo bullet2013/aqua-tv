@@ -81,6 +81,49 @@ function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
 function channelIdx(ch){return channels.indexOf(ch);}
+// Measure all channel names in the chosen category only once per font size.
+// The "Все" category naturally measures the entire playlist.
+var measuredNameKey='',measuredNameWidth=0,nameMeasureContext=null;
+function alignChannelProgrammeColumn(){
+  if(!showGuide||!channels.length)return;
+  var rows=$('rows'),key=chosenGroup+'|'+fontPx;
+  if(key!==measuredNameKey){
+    if(!nameMeasureContext){
+      var canvas=document.createElement('canvas');
+      nameMeasureContext=canvas.getContext&&canvas.getContext('2d');
+    }
+    var arr=list(),widest=0;
+    if(nameMeasureContext){
+      nameMeasureContext.font='bold '+fontPx+'px Arial';
+      for(var i=0;i<arr.length;i++){
+        var width=nameMeasureContext.measureText(String(arr[i].name||'')).width;
+        if(width>widest)widest=width;
+      }
+      // Include one space after the longest title before the EPG column.
+      measuredNameWidth=Math.ceil(widest+nameMeasureContext.measureText(' ').width);
+    }else{
+      // Fallback for older WebViews without a 2D canvas.
+      for(var j=0;j<arr.length;j++){
+        var approx=String(arr[j].name||'').length*fontPx*.62;
+        if(approx>widest)widest=approx;
+      }
+      measuredNameWidth=Math.ceil(widest+fontPx*.3);
+    }
+    measuredNameKey=key;
+  }
+  // Always leave enough room for a programme and its progress bar on
+  // narrow screens, even when a channel has an unusually long name.
+  var maxWidth=Math.max(80,rows.clientWidth-34-64-21-22-110);
+  var alignedWidth=Math.max(80,Math.min(measuredNameWidth,maxWidth))+'px';
+  var nodes=rows.children;
+  for(var k=0;k<nodes.length;k++){
+    var cell=nodes[k].children[1];
+    if(!cell||cell.style.width===alignedWidth)continue;
+    cell.style.setProperty('width',alignedWidth,'important');
+    cell.style.setProperty('flex','0 0 '+alignedWidth,'important');
+    cell.style.setProperty('max-width',alignedWidth,'important');
+  }
+}
 function syncCategoryHeader(){
   var panel=$('channels'),rows=$('rows'),header=$('channelCategoryHeader');
   if(!panel||!rows)return;
@@ -132,8 +175,10 @@ function ensureVisiblePage(force){
   if(force||pageGroup!==chosenGroup||pageSize!==capacity||pageStart!==first||$('rows').children.length!==expected){
     pageStart=first;pageSize=capacity;pageGroup=chosenGroup;
     renderPage(arr);
+    alignChannelProgrammeColumn();
     return true;
   }
+  alignChannelProgrammeColumn();
   return false;
 }
 function allRows(){
