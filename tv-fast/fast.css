@@ -310,3 +310,7 @@ html,body{--aqua-font:var(--tv-font,18px)}
 #guide #channels{display:-webkit-flex!important;display:flex!important;-webkit-flex-direction:column!important;flex-direction:column!important}
 #guide #channelCategoryHeader{display:block!important;-webkit-flex:0 0 auto!important;flex:0 0 auto!important;width:100%!important;padding:10px 13px!important;background-color:#0C4A83!important;color:#fff!important;border-bottom:1px solid #17609A!important;font-size:var(--tv-font,18px)!important;font-weight:bold!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 #guide #rows{position:relative!important;-webkit-flex:1 1 0!important;flex:1 1 0!important;height:auto!important;min-height:0!important;overflow-y:scroll!important}
+
+/* v32: channel navigation flips full pages; never smooth-scroll individual rows. */
+#guide #rows{overflow-y:hidden!important;overscroll-behavior:contain!important}
+#guide #rows .row{flex-shrink:0!important;-webkit-flex-shrink:0!important}

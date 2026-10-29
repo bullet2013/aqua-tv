@@ -2,6 +2,7 @@
 'use strict';
 var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
+var pageStart=0,pageSize=0,pageGroup='',cachedGroup='',cachedList=null;
 var $=function(id){return document.getElementById(id);};
 var el=$;
 // Older widgets keep the OSD inside #full. Move it once at startup so its
@@ -27,7 +28,7 @@ function resizeOsd(){
   panel.style.setProperty('height',Math.min(viewport,Math.max(156,required))+'px','important');
   block.style.top='10px';block.style.bottom='12px';
 }
-function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');resizeOsd();}
+function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');resizeOsd();if(showGuide)ensureVisiblePage();}
 applyFont();
 function ensureSettingsUI(){
   // Installed Tizen widgets ship an older HTML shell; create the new controls in JS.
@@ -54,7 +55,7 @@ function text(n,val){if($(n).textContent!==String(val))$(n).textContent=String(v
 function request(url,done,fail){var x=new XMLHttpRequest();x.open('GET',url,true);x.timeout=20000;x.onreadystatechange=function(){if(x.readyState===4){if(x.status===200)done(x.responseText);else if(fail)fail('HTTP '+x.status);}};x.ontimeout=function(){if(fail)fail('Timeout');};x.send();}
 function fetchJson(url,done,fail){request(url,function(raw){try{done(JSON.parse(raw));}catch(e){if(fail)fail('Invalid JSON');}},fail);}
 function contains(list,id){return list.indexOf(id)>=0;}
-function list(){return chosenGroup==='Все'?channels:channels.filter(function(x){return x.group===chosenGroup;});}
+function list(){if(cachedList&&cachedGroup===chosenGroup)return cachedList;cachedGroup=chosenGroup;cachedList=chosenGroup==='Все'?channels:channels.filter(function(x){return x.group===chosenGroup;});return cachedList;}
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
 function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч.'+(rest?' '+rest+'мин.':'')):(mins+'мин.');}
@@ -69,25 +70,68 @@ function syncCategoryHeader(){
   var label='Категория: '+chosenGroup;
   if(header.textContent!==label)header.textContent=label;
 }
-function allRows(){
-  syncCategoryHeader();
-  var parent=$('rows');parent.innerHTML='';
-  var arr=list(),chunk=document.createDocumentFragment();
-  for(var i=0;i<arr.length;i++){
+// The list is rendered one screen at a time. Only channels on the visible
+// page get DOM nodes and logo requests; no scroll animation between pages.
+function pageCapacity(){
+  var pane=$('rows');
+  if(!pane||!showGuide||pane.clientHeight<=0)return 0;
+  var row=pane.firstChild,temporary=false;
+  if(!row){row=make('div','row');pane.appendChild(row);temporary=true;}
+  var height=row.offsetHeight||50;
+  if(temporary)pane.removeChild(row);
+  return Math.max(1,Math.floor(pane.clientHeight/height));
+}
+function renderPage(arr){
+  var parent=$('rows'),chunk=document.createDocumentFragment();
+  stopMarquee();
+  parent.innerHTML='';
+  parent.scrollTop=0;
+  for(var i=pageStart;i<Math.min(arr.length,pageStart+pageSize);i++){
     var c=arr[i],r=make('div','row'),logo=add(r,'img','logo');
+    // Setting src only here avoids network requests for off-page logos.
     logo.src=c.logo||'';logo.onerror=function(){this.style.visibility='hidden';};
     add(r,'span','channel-name',c.name);
-    // A single flex row: icon, channel, now, next, progress (fixed widths).
-    var epg=add(r,'div','row-epg-combined');var marquee=add(epg,'span','row-epg-marquee','');add(marquee,'span','epg-current','');add(marquee,'span','epg-separator','  ·  ');add(marquee,'span','epg-following','');
-    var track=add(r,'div','row-epg-track');add(track,'div','row-epg-fill');
-    r.setAttribute('data-id',String(channelIdx(c)));chunk.appendChild(r);
+    var epg=add(r,'div','row-epg-combined'),marquee=add(epg,'span','row-epg-marquee','');
+    add(marquee,'span','epg-current','');
+    add(marquee,'span','epg-separator','  ·  ');
+    add(marquee,'span','epg-following','');
+    var track=add(r,'div','row-epg-track');
+    add(track,'div','row-epg-fill');
+    r.setAttribute('data-id',String(channelIdx(c)));
+    chunk.appendChild(r);
   }
-  parent.appendChild(chunk);updateRows(true);
+  parent.appendChild(chunk);
+  updateRows();
 }
-function updateRows(scroll){
+function ensureVisiblePage(force){
+  if(!showGuide)return false;
+  var arr=list(),capacity=pageCapacity();
+  if(!capacity)return false;
+  var pos=arr.indexOf(channels[focus]);
+  if(pos<0&&arr.length){pos=0;focus=channelIdx(arr[0]);}
+  var first=pos>=0?Math.floor(pos/capacity)*capacity:0;
+  var expected=Math.max(0,Math.min(capacity,arr.length-first));
+  if(force||pageGroup!==chosenGroup||pageSize!==capacity||pageStart!==first||$('rows').children.length!==expected){
+    pageStart=first;pageSize=capacity;pageGroup=chosenGroup;
+    renderPage(arr);
+    return true;
+  }
+  return false;
+}
+function allRows(){
+  syncCategoryHeader();
+  stopMarquee();
+  pageSize=0;pageStart=0;pageGroup='';
+  $('rows').innerHTML='';
+  // The guide is hidden at startup. Defer even the first logo until opened.
+  ensureVisiblePage(true);
+}
+function updateRows(){
   var arr=list(),nodes=$('rows').children,now=Date.now();
   for(var i=0;i<nodes.length;i++){
-    var c=arr[i],r=nodes[i],p=current(c),n=next(c);
+    var c=arr[pageStart+i],r=nodes[i];
+    if(!c)continue;
+    var p=current(c),n=next(c);
     var currentText=r.children[2].firstChild,fill=r.children[3].firstChild;
     var nowText=p?p[2]:'Нет программы',nextText=n?n[2]:'—';
     if(currentText.children[0].textContent!==nowText)currentText.children[0].textContent=nowText;
@@ -99,19 +143,16 @@ function updateRows(scroll){
     if(r.className!==className)r.className=className;
   }
   updateFocusMarquee();
-  if(scroll){var idx=arr.indexOf(channels[focus]);if(idx>=0&&nodes[idx]){var n=nodes[idx],s=$('rows');var top=n.offsetTop;if(top<s.scrollTop)s.scrollTop=top;else if(top+n.offsetHeight>s.scrollTop+s.clientHeight)s.scrollTop=top+n.offsetHeight-s.clientHeight;}}
 }
 function navFocus(){
+  // A focus beyond the page boundary swaps to the next/previous page.
+  if(ensureVisiblePage())return;
   var nodes=$('rows').children,arr=list();
   for(var i=0;i<nodes.length;i++){
-    var rowClass='row'+(arr[i]===channels[focus]?' selected':'')+(arr[i]===channels[active]?' playing':'');
+    var c=arr[pageStart+i];
+    if(!c)continue;
+    var rowClass='row'+(c===channels[focus]?' selected':'')+(c===channels[active]?' playing':'');
     if(nodes[i].className!==rowClass)nodes[i].className=rowClass;
-  }
-  var idx=arr.indexOf(channels[focus]);
-  if(idx>=0&&nodes[idx]){
-    var node=nodes[idx],pane=$('rows'),top=node.offsetTop;
-    if(top<pane.scrollTop)pane.scrollTop=top;
-    else if(top+node.offsetHeight>pane.scrollTop+pane.clientHeight)pane.scrollTop=top+node.offsetHeight-pane.clientHeight;
   }
   updateFocusMarquee();
 }
@@ -133,8 +174,8 @@ function marqueeStep(time){
   marqueeFrame=requestAnimationFrame(marqueeStep);
 }
 function updateFocusMarquee(){
-  var arr=list(),idx=arr.indexOf(channels[focus]);
-  var row=$('rows').children[idx],node=row&&row.querySelector('.row-epg-marquee');
+  var arr=list(),idx=arr.indexOf(channels[focus])-pageStart;
+  var row=idx>=0&&idx<pageSize?$('rows').children[idx]:null,node=row&&row.querySelector('.row-epg-marquee');
   if(zone!=='channels'||!showGuide||!node){stopMarquee();return;}
   if(marqueeNode===node)return;
   stopMarquee();marqueeNode=node;
@@ -248,7 +289,8 @@ function mode(open){
       allRows();
     }else{
       syncCategoryHeader();
-      updateRows(false);
+      ensureVisiblePage();
+      updateRows();
     }
     // Render both NOW and all UPCOMING entries for the actually tuned channel.
     // renderRight also refreshes row focus, so no second navFocus pass.
@@ -320,7 +362,7 @@ window.AquaFast={key:key,onStatus:function(type,msg,w,h){
   if(type==='error')console.warn('AVPlay:',msg);
 }};
 document.addEventListener('keydown',function(e){var k=e.key;if(k==='Esc')k='Escape';if(k==='Escape'||k==='Backspace'||k==='Enter'||k.indexOf('Arrow')===0){e.preventDefault();key(k);}});
-window.addEventListener('resize',function(){resizeOsd();rect();});
+window.addEventListener('resize',function(){resizeOsd();if(showGuide)ensureVisiblePage();rect();});
 $('rows').addEventListener('click',function(e){var r=e.target;while(r&&r!==$('rows')&&!r.getAttribute('data-id'))r=r.parentNode;if(r&&r.getAttribute('data-id')){focus=Number(r.getAttribute('data-id'));mode(false);tune(focus);}});
 $('current').addEventListener('click',function(){zone='programmes';showFocus=0;details();});
 $('upcoming').addEventListener('click',function(e){var n=e.target;while(n&&n!==$('upcoming')&&!n.getAttribute('data-index'))n=n.parentNode;if(n&&n.getAttribute('data-index')){zone='programmes';showFocus=Number(n.getAttribute('data-index'));details();}});
@@ -331,11 +373,11 @@ function boot(){
   fetchJson(base+'tv-fast/channels.json',function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
-    focus=active;logoOsd(data[active]);allRows();renderRight();
+    focus=active;cachedList=null;logoOsd(data[active]);syncCategoryHeader();
     $('loading').className='hidden';rect();tune(active);
     // EPG is fetched AFTER the interface becomes usable.
     fetchJson(base+'tv-fast/guide.json',function(d){
-      guide=d.programmes||{};updateRows(false);renderRight();if(!showGuide)info();
+      guide=d.programmes||{};if(showGuide){ensureVisiblePage();updateRows();renderRight();}else if($('osd').className==='show')info();
     },function(e){text('current','Ошибка EPG: '+e);});
   },function(error){text('loading','Ошибка плейлиста: '+error);});
 }
@@ -343,7 +385,8 @@ $('fontChoices').addEventListener('click',function(e){var node=e.target;while(no
 setInterval(function(){
   if(!channels.length)return;
   if(showGuide){
-    updateRows(false);
+    ensureVisiblePage();
+    updateRows();
     var c=channels[focus];
     if(!c)return;
     var data=panelData(c);
