@@ -234,3 +234,16 @@ body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!import
   background-color:#17609A!important;
 }
 body.focus-programmes #guide #rows .row.selected{background-color:#17609A!important;outline:none!important}
+
+/* v23: compact infobar, 20% transparent background only (content stays opaque). */
+#osd{height:156px!important;background:rgba(12,74,131,.80)!important}
+#osdLogo{left:24px!important;top:50%!important;margin-top:-63px!important;width:126px!important;height:126px!important;line-height:126px!important;background:transparent!important}
+#osdLogo img{max-width:100%!important;max-height:100%!important;object-fit:contain!important;background:transparent!important}
+#osdText{left:174px!important;right:225px!important;top:12px!important}
+#osdName{font-size:27px!important;line-height:32px!important}
+#osdNow{font-size:22px!important;margin-top:3px!important;line-height:26px!important}
+#osdNext{font-size:18px!important;margin-top:4px!important;line-height:22px!important}
+#osdProgressRow{height:29px!important;margin-top:7px!important;padding-top:9px!important;padding-right:210px!important}
+#osdTrack{height:8px!important}
+#osdLeft{right:0!important;width:195px!important;font-size:25px!important;font-weight:bold!important;line-height:29px!important;top:0!important}
+#resolution{right:25px!important;width:190px!important;font-size:26px!important;font-weight:bold!important;margin-top:-16px!important}
