@@ -47,6 +47,7 @@ function contains(list,id){return list.indexOf(id)>=0;}
 function list(){return chosenGroup==='Все'?channels:channels.filter(function(x){return x.group===chosenGroup;});}
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
+function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч. '+rest+'мин.'):(mins+'мин.');}
 function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
@@ -137,10 +138,17 @@ function categoryMenu(){
   entry.setAttribute('data-settings','true');
   entry.setAttribute('aria-selected',String(catFocus===groups.length));
 }
+function renderCurrentProgramme(p){
+  var node=$('current');if(!node)return;
+  var title=node.querySelector('.current-programme-title'),left=node.querySelector('.current-programme-left');
+  if(!title){node.innerHTML='';title=add(node,'div','current-programme-title','');left=add(node,'div','current-programme-left','');}
+  var name=p?p[2]:'Нет программы';if(title.textContent!==name)title.textContent=name;
+  var remainingText=p?'Осталось '+remaining(p[1]-Date.now()):'';if(left.textContent!==remainingText)left.textContent=remainingText;
+}
 function renderRight(){
   var c=channels[focus];if(!c)return;
   var p=current(c);
-  text('current',(p?p[2]+' · '+fmt(p[0])+'–'+fmt(p[1]):'Нет программы')+'  ★');
+  renderCurrentProgramme(p);
   shows=[];var entries=guide[c.id]||[],now=Date.now();
   for(var i=0;i<entries.length&&shows.length<10;i++)if(entries[i][0]>now)shows.push(entries[i]);
   var parent=$('upcoming');parent.innerHTML='';
@@ -170,7 +178,7 @@ function info(){
   var c=channels[active];if(!c)return;
   text('osdName',c.name);var p=current(c),n=next(c);
   text('osdNow',p?p[2]:'Нет данных EPG');text('osdNext','Далее: '+(n?n[2]:'нет данных'));
-  if(p){var time=Date.now(),width=Math.round(Math.max(0,Math.min(100,100*(time-p[0])/(p[1]-p[0]))));$('osdProgress').style.width=width+'%';text('osdLeft',Math.ceil(Math.max(0,p[1]-time)/60000)+' мин');}else{$('osdProgress').style.width='0%';text('osdLeft','');}
+  if(p){var time=Date.now(),width=Math.round(Math.max(0,Math.min(100,100*(time-p[0])/(p[1]-p[0]))));$('osdProgress').style.width=width+'%';text('osdLeft',remaining(p[1]-time));}else{$('osdProgress').style.width='0%';text('osdLeft','');}
 }
 function showOsd(){
   // Keep the OSD visible in fullscreen. The old five-second timeout made
@@ -282,6 +290,6 @@ function boot(){
   },function(error){text('loading','Ошибка плейлиста: '+error);});
 }
 $('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
-setInterval(function(){if(!channels.length)return;if(showGuide){updateRows(false);}else{info();}},15000);
+setInterval(function(){if(!channels.length)return;if(showGuide){updateRows(false);renderCurrentProgramme(current(channels[focus]));}else{info();}},15000);
 boot();
 })();
