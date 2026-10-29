@@ -211,3 +211,6 @@ body.focus-programmes .row.selected{background:#6495ED!important;outline:none!im
 body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!important;outline:none!important}
 #guide #current.programme-selected,#guide #upcoming .show-row.programme-selected{outline:3px solid #E0FFFF!important;outline-offset:-3px!important}
 #guide #rows .row.selected .channel-name,#guide #rows .row.selected .row-epg-combined{background-color:transparent!important}
+
+/* v19: channel-list menu background matches the infobar; selection and other panels unchanged. */
+#guide #channels,#guide #rows,#guide #rows .row:not(.selected),#guide #categories{background-color:#061c35!important}
