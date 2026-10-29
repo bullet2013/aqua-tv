@@ -279,3 +279,8 @@ html,body{--aqua-font:var(--tv-font,18px)}
 #osdName,#osdNow,#osdNext{flex:0 1 auto!important;min-height:0!important;line-height:1.1!important;margin-top:2px!important}
 #osdProgressRow{flex:0 0 26px!important;height:26px!important;margin-top:4px!important;padding-top:9px!important}
 #osdNext{margin-bottom:0!important}
+
+/* v26: modest gap between programme text and its progress bar. */
+#guide #rows .row-epg-combined{margin-right:12px!important}
+/* Lift all fullscreen infobar text as one group, keeping clear bottom space. */
+#osdText{top:4px!important;bottom:20px!important;justify-content:center!important}
