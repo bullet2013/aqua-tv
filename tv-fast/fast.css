@@ -224,3 +224,13 @@ body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!import
 }
 #guide #right,#guide{background-color:transparent!important}
 #guide #preview{background-color:transparent!important}
+
+/* v22: subtle focus highlight, slightly lighter than the unified #0C4A83 background. */
+#guide #rows .row.selected,#guide #rows .row.selected.playing,
+#guide #current.programme-selected,#guide #upcoming .show-row.programme-selected,
+#guide #categories .cat.active,#guide #categories .cat[aria-selected="true"],
+#fontSettings .font-setting-row.active,#fontSettings .speed-row.active,
+#fontSettings .font-choice.selected{
+  background-color:#17609A!important;
+}
+body.focus-programmes #guide #rows .row.selected{background-color:#17609A!important;outline:none!important}
