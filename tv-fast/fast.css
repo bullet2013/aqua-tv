@@ -247,3 +247,23 @@ body.focus-programmes #guide #rows .row.selected{background-color:#17609A!import
 #osdTrack{height:8px!important}
 #osdLeft{right:0!important;width:195px!important;font-size:25px!important;font-weight:bold!important;line-height:29px!important;top:0!important}
 #resolution{right:25px!important;width:190px!important;font-size:26px!important;font-weight:bold!important;margin-top:-16px!important}
+
+/* v24: one global font-size control for every text surface; preserve colour/weight. */
+html,body{--aqua-font:var(--tv-font,18px)}
+#guide .row,#guide .channel-name,#guide .row-epg-combined,#guide .row-epg-marquee,
+#guide .epg-current,#guide .epg-following,#guide .epg-separator,
+#guide #current,#guide #current .current-programme-title,#guide #current .current-programme-left,
+#guide #upcoming,#guide #upcoming .show-row,#guide #upcoming .show-row .time,
+#guide #categories,#guide #categories .cat,#guide #categories .settings-entry,
+#osd #osdName,#osd #osdNow,#osd #osdNext,#osd #osdLeft,#osd #resolution,
+#details,#details h2,#details #detailTitle,#details #detailTime,#details #detailBody,#details small,
+#fontSettings,#fontSettings h2,#fontSettings h3,#fontSettings small,
+#fontSettings .font-choice,#fontSettings .speed-row,#fontSettings .speed-row strong,
+#fontSettings .font-setting-row,#fontSettings .font-setting-row *{
+  font-size:var(--tv-font,18px)!important;
+}
+#osd #osdName,#osd #osdNow,#osd #osdNext{line-height:1.2!important}
+#osd #osdLeft{line-height:1.2!important}
+#osd #resolution{line-height:1.2!important}
+#osd #osdNow,#osd #osdNext{margin-top:5px!important}
+#osd #osdProgressRow{margin-top:8px!important}
