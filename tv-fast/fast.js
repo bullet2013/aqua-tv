@@ -62,7 +62,15 @@ function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
 function channelIdx(ch){return channels.indexOf(ch);}
+function syncCategoryHeader(){
+  var panel=$('channels'),rows=$('rows'),header=$('channelCategoryHeader');
+  if(!panel||!rows)return;
+  if(!header){header=make('div','channel-category-header');header.id='channelCategoryHeader';panel.insertBefore(header,rows);}
+  var label='Категория: '+chosenGroup;
+  if(header.textContent!==label)header.textContent=label;
+}
 function allRows(){
+  syncCategoryHeader();
   var parent=$('rows');parent.innerHTML='';
   var arr=list(),chunk=document.createDocumentFragment();
   for(var i=0;i<arr.length;i++){
@@ -216,7 +224,7 @@ function mode(open){
   $('guide').className=open?'':'hidden';
   $('full').className=open?'hidden':'';
   if(!open)stopMarquee();
-  if(open){$('osd').className='';zone='channels';document.body.classList.remove('focus-programmes');menu=false;hide('categories');navFocus();}
+  if(open){syncCategoryHeader();$('osd').className='';zone='channels';document.body.classList.remove('focus-programmes');menu=false;hide('categories');navFocus();}
   else showOsd();
   // No DOM reparenting. Never rebuild channels/EPG here.
   rect();
