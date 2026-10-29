@@ -47,7 +47,7 @@ function contains(list,id){return list.indexOf(id)>=0;}
 function list(){return chosenGroup==='Все'?channels:channels.filter(function(x){return x.group===chosenGroup;});}
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
-function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч. '+rest+'мин.'):(mins+'мин.');}
+function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч.'+(rest?' '+rest+'мин.':'')):(mins+'мин.');}
 function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
