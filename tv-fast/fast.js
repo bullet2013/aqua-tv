@@ -28,7 +28,7 @@ function ensureSettingsUI(){
   if(!fontRow){fontRow=make('div','font-setting-row');fontRow.id='fontSettingRow';var title=add(fontRow,'h3','','Размер шрифта');choices.parentNode.insertBefore(fontRow,choices);fontRow.appendChild(choices);}
   var speedRow=$('scrollSpeedRow');
   if(!speedRow){speedRow=make('div','speed-row');speedRow.id='scrollSpeedRow';speedRow.appendChild(document.createTextNode('Скорость прокрутки: '));var value=add(speedRow,'strong','','Нормально');value.id='scrollSpeedValue';}
-  panel.insertBefore(speedRow,fontRow);
+  if(fontRow.nextSibling!==speedRow)panel.insertBefore(speedRow,fontRow.nextSibling);
   var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
 }
 function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateSettingsFocus();}
@@ -120,6 +120,8 @@ function updateFocusMarquee(){
   var contentWidth=0,children=node.children;
   for(var j=0;j<children.length;j++)contentWidth+=children[j].getBoundingClientRect().width;
   marqueeOverflow=Math.max(0,Math.ceil(contentWidth-node.parentNode.clientWidth+8));
+  node.style.setProperty('animation','none','important');
+  node.style.setProperty('transition','none','important');
   if(!marqueeOverflow)return;
   marqueeTimer=setTimeout(function(){marqueeTimer=null;marqueeLast=0;marqueeFrame=requestAnimationFrame(marqueeStep);},marqueeDelay);
 }
