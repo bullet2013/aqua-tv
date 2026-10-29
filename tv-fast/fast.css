@@ -178,3 +178,25 @@ body.focus-programmes .row.selected{outline:none!important}
 .row-epg-fill{background:#71c6ff!important}
 #osdLogo{background:transparent!important}
 #osdLogo img{background:transparent!important;object-fit:contain!important}
+
+/* v17: user-defined palette; the AVPlay preview must have a transparent path to video. */
+#guide{background:transparent!important}
+#channels,#rows{background:#1E90FF!important}
+#right{background:transparent!important}
+#preview{background:transparent!important;background-color:transparent!important;border:2px solid #E0FFFF!important;opacity:1!important;visibility:visible!important}
+#current,#upcoming{background:#1E90FF!important}
+.row{background:#1E90FF!important;border-bottom-color:#4d9ee9!important}
+.row.selected{background:#6495ED!important;outline:2px solid #E0FFFF!important;outline-offset:-2px!important}
+body.focus-programmes .row.selected{background:#6495ED!important;outline:none!important}
+.row.selected .channel-name,.row.selected .row-epg-combined,.row.selected .row-epg-marquee{background:transparent!important;outline:none!important;border:0!important}
+.row .channel-name{color:#FFFFFF!important}
+.row .epg-current{color:#87CEFA!important}
+.row .epg-following{color:#ADD8E6!important}
+.row .epg-separator{color:#ADD8E6!important}
+.row-epg-track{background:#3c80c9!important}
+.row-epg-fill{background:#E0FFFF!important}
+#current .current-programme-title,#upcoming .show-row,#upcoming .show-row span:not(.time){color:#87CEFA!important}
+#current .current-programme-left,#upcoming .show-row .time{color:#FFFFFF!important}
+#current.programme-selected,#upcoming .programme-selected{background:#6495ED!important;outline:3px solid #E0FFFF!important;outline-offset:-3px!important}
+#categories{background:#1E90FF!important;border-color:#E0FFFF!important}
+.cat.active,.cat[aria-selected="true"]{background:#6495ED!important;border-color:#E0FFFF!important}
