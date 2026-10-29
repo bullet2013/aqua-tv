@@ -284,3 +284,18 @@ html,body{--aqua-font:var(--tv-font,18px)}
 #guide #rows .row-epg-combined{margin-right:12px!important}
 /* Lift all fullscreen infobar text as one group, keeping clear bottom space. */
 #osdText{top:4px!important;bottom:20px!important;justify-content:center!important}
+
+/* v27: never shrink programme text line boxes; preserve Cyrillic descenders. */
+#osdText{top:10px!important;bottom:16px!important;justify-content:flex-start!important;overflow:visible!important}
+#osd #osdName,#osd #osdNow,#osd #osdNext{
+  flex:0 0 auto!important;
+  min-height:0!important;
+  height:auto!important;
+  line-height:1.4!important;
+  padding-bottom:0.12em!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+}
+#osd #osdNow,#osd #osdNext{margin-top:0!important}
+#osd #osdProgressRow{flex:0 0 28px!important;margin-top:0!important}

@@ -17,7 +17,7 @@ marqueeSpeed=speedOptions[speedIndex()];
 var settingsSection=0,marqueePauseUntil=0;
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
-function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(156,Math.round(fontPx*5.8+52))+'px';}
+function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(156,Math.round(fontPx*5.8+90))+'px';}
 applyFont();
 function ensureSettingsUI(){
   // Installed Tizen widgets ship an older HTML shell; create the new controls in JS.
