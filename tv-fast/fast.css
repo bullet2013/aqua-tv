@@ -139,3 +139,8 @@ body.focus-programmes .row.selected{outline:none!important}
 #fontSettingRow h3{margin:3px 0 6px!important;font-size:21px!important}
 #fontChoices{margin:0!important;padding:5px 0 8px!important}
 #scrollSpeedRow{margin:6px 0 10px!important;padding:11px 12px!important;display:block!important;visibility:visible!important}
+
+/* v14: JS owns all scrolling. Disable legacy keyframe animation on selected rows. */
+.row.selected .row-epg-marquee,.row .row-epg-marquee{animation-name:none!important;animation:none!important;transition:none!important}
+#fontSettingRow{order:0}
+#scrollSpeedRow{order:1}
