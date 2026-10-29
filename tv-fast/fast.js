@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var base='https://bullet2013.github.io/aqua-tv/';
-var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='';
+var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
 var $=function(id){return document.getElementById(id);};
 var el=$;
 // Older widgets keep the OSD inside #full. Move it once at startup so its
@@ -95,7 +95,7 @@ function updateRows(scroll){
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
     var width=pct.toFixed(0)+'%';
     if(fill.style.width!==width)fill.style.width=width;
-    var className='row'+(channelIdx(c)===focus?' selected':'')+(channelIdx(c)===active?' playing':'');
+    var className='row'+(c===channels[focus]?' selected':'')+(c===channels[active]?' playing':'');
     if(r.className!==className)r.className=className;
   }
   updateFocusMarquee();
@@ -103,7 +103,10 @@ function updateRows(scroll){
 }
 function navFocus(){
   var nodes=$('rows').children,arr=list();
-  for(var i=0;i<nodes.length;i++)nodes[i].className='row'+(channelIdx(arr[i])===focus?' selected':'')+(channelIdx(arr[i])===active?' playing':'');
+  for(var i=0;i<nodes.length;i++){
+    var rowClass='row'+(arr[i]===channels[focus]?' selected':'')+(arr[i]===channels[active]?' playing':'');
+    if(nodes[i].className!==rowClass)nodes[i].className=rowClass;
+  }
   var idx=arr.indexOf(channels[focus]);
   if(idx>=0&&nodes[idx]){
     var node=nodes[idx],pane=$('rows'),top=node.offsetTop;
@@ -163,14 +166,23 @@ function renderCurrentProgramme(p){
   var name=p?p[2]:'Нет программы';if(title.textContent!==name)title.textContent=name;
   var remainingText=p?'Осталось '+remaining(p[1]-Date.now()):'';if(left.textContent!==remainingText)left.textContent=remainingText;
 }
-function renderRight(){
+// Collect the current/next shows once. A stable signature prevents rebuilding
+// the right panel on every 15-second progress-bar refresh.
+function panelData(c){
+  var p=current(c),entries=guide[c.id]||[],now=Date.now(),upcoming=[];
+  for(var i=0;i<entries.length&&upcoming.length<10;i++)if(entries[i][0]>now)upcoming.push(entries[i]);
+  var signature=c.id+'|'+(p?p[0]+'|'+p[1]+'|'+p[2]:'no-current');
+  for(i=0;i<upcoming.length;i++)signature+='|'+upcoming[i][0]+'|'+upcoming[i][1]+'|'+upcoming[i][2];
+  return {programme:p,upcoming:upcoming,signature:signature};
+}
+function renderRight(data){
   var c=channels[focus];if(!c)return;
-  var p=current(c);
-  renderCurrentProgramme(p);
-  shows=[];var entries=guide[c.id]||[],now=Date.now();
-  for(var i=0;i<entries.length&&shows.length<10;i++)if(entries[i][0]>now)shows.push(entries[i]);
+  data=data||panelData(c);
+  renderCurrentProgramme(data.programme);
+  shows=data.upcoming;
+  rightProgrammeSignature=data.signature;
   var parent=$('upcoming');parent.innerHTML='';
-  for(i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
+  for(var i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
@@ -224,7 +236,24 @@ function mode(open){
   $('guide').className=open?'':'hidden';
   $('full').className=open?'hidden':'';
   if(!open)stopMarquee();
-  if(open){syncCategoryHeader();$('osd').className='';zone='channels';document.body.classList.remove('focus-programmes');menu=false;hide('categories');navFocus();}
+  if(open){
+    $('osd').className='';
+    zone='channels';showFocus=0;menu=false;
+    document.body.classList.remove('focus-programmes');
+    hide('categories');
+    // Fullscreen channel changes alter focus without updating the hidden EPG.
+    // Rebuild the channel category only if the tuned channel is filtered out.
+    if(channels[focus]&&list().indexOf(channels[focus])<0){
+      chosenGroup=channels[focus].group||'Все';
+      allRows();
+    }else{
+      syncCategoryHeader();
+      updateRows(false);
+    }
+    // Render both NOW and all UPCOMING entries for the actually tuned channel.
+    // renderRight also refreshes row focus, so no second navFocus pass.
+    renderRight();
+  }
   else showOsd();
   // No DOM reparenting. Never rebuild channels/EPG here.
   rect();
@@ -235,7 +264,7 @@ function tune(index){
   active=index;focus=index;
   try{localStorage.setItem('aqua-fast-channel',String(index));}catch(e){}
   logoOsd(channels[index]);if(changed||!tune.started){tune.started=true;send({type:'play',url:channels[index].url});}
-  if(showGuide){navFocus();renderRight();}else showOsd();
+  if(showGuide){renderRight();}else showOsd();
 }
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
@@ -281,7 +310,7 @@ function key(k){
     if(menu){catFocus=(catFocus+d+groups.length+1)%(groups.length+1);categoryMenu();return;}
     if(zone==='channels'){
       var arr=list(),index=arr.indexOf(channels[focus]);
-      focus=channelIdx(arr[(index+d+arr.length)%arr.length]);navFocus();renderRight();
+      focus=channelIdx(arr[(index+d+arr.length)%arr.length]);renderRight();
     }else{showFocus=Math.max(0,Math.min(shows.length,showFocus+d));updateProgrammeFocus();}
   }
 }
@@ -311,6 +340,21 @@ function boot(){
   },function(error){text('loading','Ошибка плейлиста: '+error);});
 }
 $('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
-setInterval(function(){if(!channels.length)return;if(showGuide){updateRows(false);renderCurrentProgramme(current(channels[focus]));}else{info();}},15000);
+setInterval(function(){
+  if(!channels.length)return;
+  if(showGuide){
+    updateRows(false);
+    var c=channels[focus];
+    if(!c)return;
+    var data=panelData(c);
+    // Programme boundaries refresh the complete right EPG, not only "now".
+    if(data.signature!==rightProgrammeSignature)renderRight(data);
+    else renderCurrentProgramme(data.programme);
+  }else if($('osd').className==='show'){
+    // The fullscreen infobar auto-hides in five seconds; don't update a
+    // hidden OSD and repeatedly change its layout every fifteen seconds.
+    info();
+  }
+},15000);
 boot();
 })();
