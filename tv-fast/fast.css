@@ -131,3 +131,11 @@ body.focus-programmes .row.selected{outline:none!important}
 .row-epg-marquee>span{flex:0 0 auto!important;white-space:pre!important}
 .font-setting-row{border:2px solid transparent;padding:8px}
 .font-setting-row.active{border-color:#0078c8;background:#d9f0ff}
+
+/* v13: show both settings on legacy widget shells without vertical clipping. */
+#fontSettings{width:760px!important;max-width:94%!important;max-height:94vh!important;overflow-y:auto!important;padding:16px 22px!important}
+#fontSettings h2{margin:0 0 8px!important}
+#fontSettingRow{padding:5px 8px!important}
+#fontSettingRow h3{margin:3px 0 6px!important;font-size:21px!important}
+#fontChoices{margin:0!important;padding:5px 0 8px!important}
+#scrollSpeedRow{margin:6px 0 10px!important;padding:11px 12px!important;display:block!important;visibility:visible!important}

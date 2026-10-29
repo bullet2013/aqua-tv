@@ -19,7 +19,19 @@ var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
 function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(192,192+(fontPx-18)*6)+'px';}
 applyFont();
-function openSettings(){settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateSettingsFocus();}
+function ensureSettingsUI(){
+  // Installed Tizen widgets ship an older HTML shell; create the new controls in JS.
+  var panel=$('fontSettings');if(!panel)return;
+  var heading=panel.querySelector('h2');if(heading)heading.textContent='Настройки';
+  var choices=$('fontChoices');if(!choices)return;
+  var fontRow=$('fontSettingRow');
+  if(!fontRow){fontRow=make('div','font-setting-row');fontRow.id='fontSettingRow';var title=add(fontRow,'h3','','Размер шрифта');choices.parentNode.insertBefore(fontRow,choices);fontRow.appendChild(choices);}
+  var speedRow=$('scrollSpeedRow');
+  if(!speedRow){speedRow=make('div','speed-row');speedRow.id='scrollSpeedRow';speedRow.appendChild(document.createTextNode('Скорость прокрутки: '));var value=add(speedRow,'strong','','Нормально');value.id='scrollSpeedValue';}
+  panel.insertBefore(speedRow,fontRow);
+  var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
+}
+function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateSettingsFocus();}
 function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');}
 function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));if(i===fontSelected){var item=a;}}if(item){var left=item.offsetLeft-p.offsetLeft;p.scrollLeft=Math.max(0,left-(p.clientWidth-item.offsetWidth)/2);}}
 function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=speedNames[speedIndex()];}
