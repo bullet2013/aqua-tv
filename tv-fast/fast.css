@@ -299,3 +299,9 @@ html,body{--aqua-font:var(--tv-font,18px)}
 }
 #osd #osdNow,#osd #osdNext{margin-top:0!important}
 #osd #osdProgressRow{flex:0 0 28px!important;margin-top:0!important}
+
+/* v28: allow the infobar to grow upward, never beyond the bottom viewport. */
+#osd{bottom:0!important;top:auto!important;max-height:100vh!important;overflow:hidden!important}
+#osdText{top:10px!important;bottom:12px!important;justify-content:flex-start!important;overflow:visible!important}
+#osd #osdName,#osd #osdNow,#osd #osdNext{flex-shrink:0!important;line-height:1.5!important;padding-bottom:0!important;margin:0!important}
+#osd #osdProgressRow{flex-shrink:0!important;margin-top:4px!important}
