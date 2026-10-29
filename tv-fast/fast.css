@@ -144,3 +144,10 @@ body.focus-programmes .row.selected{outline:none!important}
 .row.selected .row-epg-marquee,.row .row-epg-marquee{animation-name:none!important;animation:none!important;transition:none!important}
 #fontSettingRow{order:0}
 #scrollSpeedRow{order:1}
+
+/* v15: current programme title with a separate remaining-time line. */
+#current{white-space:normal!important;min-height:85px!important}
+.current-programme-title{font-size:calc(var(--tv-font,18px) * 1.1);font-weight:bold;line-height:1.2;overflow-wrap:break-word}
+.current-programme-left{font-size:calc(var(--tv-font,18px) * .85);color:#5487a9;margin-top:7px}
+#osdLeft{width:145px!important;font-size:18px!important}
+#osdProgressRow{padding-right:165px!important}
