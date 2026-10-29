@@ -15,7 +15,8 @@ try{marqueeSpeed=Number(localStorage.getItem('aqua-fast-scroll-speed'))||65;}cat
 var speedOptions=[35,65,105],speedNames=['Медленно','Нормально','Быстро'];
 function speedIndex(){var idx=0,diff=Infinity;for(var i=0;i<speedOptions.length;i++){var n=Math.abs(speedOptions[i]-marqueeSpeed);if(n<diff){diff=n;idx=i;}}return idx;}
 marqueeSpeed=speedOptions[speedIndex()];
-var settingsSection=0,marqueePauseUntil=0;
+var settingsSection=0,marqueePauseUntil=0,showNextInList=true;
+try{showNextInList=localStorage.getItem('aqua-fast-show-next')!=='no';}catch(ignore){}
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
 function resizeOsd(){
@@ -40,13 +41,30 @@ function ensureSettingsUI(){
   var speedRow=$('scrollSpeedRow');
   if(!speedRow){speedRow=make('div','speed-row');speedRow.id='scrollSpeedRow';speedRow.appendChild(document.createTextNode('Скорость прокрутки: '));var value=add(speedRow,'strong','','Нормально');value.id='scrollSpeedValue';}
   if(fontRow.nextSibling!==speedRow)panel.insertBefore(speedRow,fontRow.nextSibling);
+  // The preinstalled Tizen shell may not contain this new settings row.
+  var nextRow=$('showNextRow');
+  if(!nextRow){
+    nextRow=make('div','show-next-row');nextRow.id='showNextRow';
+    nextRow.appendChild(document.createTextNode('Отображать следующую передачу в списке каналов: '));
+    var nextValue=add(nextRow,'strong','','Да');nextValue.id='showNextValue';
+  }
+  if(speedRow.nextSibling!==nextRow)panel.insertBefore(nextRow,speedRow.nextSibling);
   var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
 }
-function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateSettingsFocus();}
-function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');}
+function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();}
+function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');var next=$('showNextRow');if(next)next.className='show-next-row'+(settingsSection===2?' active':'');}
 function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));if(i===fontSelected){var item=a;}}if(item){var left=item.offsetLeft-p.offsetLeft;p.scrollLeft=Math.max(0,left-(p.clientWidth-item.offsetWidth)/2);}}
 function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=speedNames[speedIndex()];}
 function setSpeed(delta){marqueeSpeed=speedOptions[Math.max(0,Math.min(2,speedIndex()+(delta>0?1:-1)))];try{localStorage.setItem('aqua-fast-scroll-speed',String(marqueeSpeed));}catch(ignore){}updateSpeedLabel();}
+function updateShowNextLabel(){var node=$('showNextValue');if(node)node.textContent=showNextInList?'Да':'Нет';}
+function setShowNext(value){
+  if(showNextInList===value)return;
+  showNextInList=value;
+  try{localStorage.setItem('aqua-fast-show-next',value?'yes':'no');}catch(ignore){}
+  updateShowNextLabel();
+  stopMarquee();
+  if(showGuide)updateRows();
+}
 function chooseFont(){fontPx=fontOptions[fontSelected];applyFont();try{localStorage.setItem('aqua-fast-font',String(fontPx));}catch(ignore){}settings=false;hide('fontSettings');}
 
 function hide(n){$(n).className='hidden';}
@@ -135,7 +153,10 @@ function updateRows(){
     var currentText=r.children[2].firstChild,fill=r.children[3].firstChild;
     var nowText=p?p[2]:'Нет программы',nextText=n?n[2]:'—';
     if(currentText.children[0].textContent!==nowText)currentText.children[0].textContent=nowText;
-    if(currentText.children[2].textContent!==nextText)currentText.children[2].textContent=nextText;
+    var following=showNextInList?nextText:'';
+    var separator=showNextInList?'  ·  ':'';
+    if(currentText.children[1].textContent!==separator)currentText.children[1].textContent=separator;
+    if(currentText.children[2].textContent!==following)currentText.children[2].textContent=following;
     var pct=p?Math.max(0,Math.min(100,100*(now-p[0])/(p[1]-p[0]))):0;
     var width=pct.toFixed(0)+'%';
     if(fill.style.width!==width)fill.style.width=width;
@@ -318,9 +339,13 @@ function back(){
 function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
   if(settings){
-    if(k==='ArrowUp'||k==='ArrowDown'){settingsSection=k==='ArrowDown'?1:0;updateSettingsFocus();return;}
+    if(k==='ArrowUp'||k==='ArrowDown'){
+      settingsSection=Math.max(0,Math.min(2,settingsSection+(k==='ArrowDown'?1:-1)));
+      updateSettingsFocus();return;
+    }
     if(k==='ArrowLeft'||k==='ArrowRight'){
       if(settingsSection===1)setSpeed(k==='ArrowRight'?1:-1);
+      else if(settingsSection===2)setShowNext(k==='ArrowRight');
       else{fontSelected=Math.max(0,Math.min(fontOptions.length-1,fontSelected+(k==='ArrowRight'?1:-1)));renderSettings();}
       return;
     }
@@ -353,7 +378,7 @@ function key(k){
     if(zone==='channels'){
       var arr=list(),index=arr.indexOf(channels[focus]);
       focus=channelIdx(arr[(index+d+arr.length)%arr.length]);renderRight();
-    }else{showFocus=Math.max(0,Math.min(shows.length,showFocus+d));updateProgrammeFocus();}
+    }else{showFocus=(showFocus+d+shows.length+1)%(shows.length+1);updateProgrammeFocus();}
   }
 }
 var catFocus=0;

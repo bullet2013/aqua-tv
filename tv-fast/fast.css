@@ -314,3 +314,8 @@ html,body{--aqua-font:var(--tv-font,18px)}
 /* v32: channel navigation flips full pages; never smooth-scroll individual rows. */
 #guide #rows{overflow-y:hidden!important;overscroll-behavior:contain!important}
 #guide #rows .row{flex-shrink:0!important;-webkit-flex-shrink:0!important}
+
+/* v33: a third selectable settings row, matching existing speed controls. */
+#fontSettings .show-next-row{display:block!important;visibility:visible!important;margin:6px 0 10px!important;padding:11px 12px!important;background:#0C4A83!important;color:#fff!important;border:2px solid transparent!important;font-size:var(--tv-font,18px)!important;line-height:1.25!important}
+#fontSettings .show-next-row strong{font-size:var(--tv-font,18px)!important}
+#fontSettings .show-next-row.active{background:#17609A!important;border-color:#E0FFFF!important}
