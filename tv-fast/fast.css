@@ -125,3 +125,9 @@ body.focus-programmes .row.selected{outline:none!important}
 
 /* v11: Tizen WebKit compatibility: avoid aspect-ratio, size preview explicitly in JS. */
 #preview{aspect-ratio:auto!important;height:38vh!important;min-height:120px!important;max-height:42vh!important;display:block!important;visibility:visible!important;background:transparent!important}
+
+/* v12: reliable text width and focusable Settings groups. */
+.row-epg-marquee{display:inline-flex!important;flex-wrap:nowrap!important;width:auto!important;min-width:max-content!important;white-space:nowrap!important}
+.row-epg-marquee>span{flex:0 0 auto!important;white-space:pre!important}
+.font-setting-row{border:2px solid transparent;padding:8px}
+.font-setting-row.active{border-color:#0078c8;background:#d9f0ff}
