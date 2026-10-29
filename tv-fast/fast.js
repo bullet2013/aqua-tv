@@ -152,7 +152,7 @@ function renderRight(){
   shows=[];var entries=guide[c.id]||[],now=Date.now();
   for(var i=0;i<entries.length&&shows.length<10;i++)if(entries[i][0]>now)shows.push(entries[i]);
   var parent=$('upcoming');parent.innerHTML='';
-  for(i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
+  for(i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
