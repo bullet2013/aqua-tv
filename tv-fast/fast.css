@@ -267,3 +267,15 @@ html,body{--aqua-font:var(--tv-font,18px)}
 #osd #resolution{line-height:1.2!important}
 #osd #osdNow,#osd #osdNext{margin-top:5px!important}
 #osd #osdProgressRow{margin-top:8px!important}
+
+/* v25: programme times use natural text width and a single gap, not fixed 65px. */
+#guide #upcoming{padding:2px 5px!important}
+#guide #upcoming .show-row{display:block!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;padding:4px 8px!important;line-height:1.12!important;min-height:0!important}
+#guide #upcoming .show-row .time{display:inline!important;width:auto!important;min-width:0!important;margin:0 0.35em 0 0!important;white-space:nowrap!important}
+#guide #upcoming .show-row .programme-name{display:inline!important;white-space:nowrap!important}
+/* Keep the last line of the infobar above the screen edge at every font size. */
+#osd{overflow:hidden!important}
+#osdText{top:8px!important;bottom:8px!important;height:auto!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;justify-content:center!important}
+#osdName,#osdNow,#osdNext{flex:0 1 auto!important;min-height:0!important;line-height:1.1!important;margin-top:2px!important}
+#osdProgressRow{flex:0 0 26px!important;height:26px!important;margin-top:4px!important;padding-top:9px!important}
+#osdNext{margin-bottom:0!important}
