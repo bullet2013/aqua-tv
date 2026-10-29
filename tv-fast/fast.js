@@ -17,7 +17,14 @@ marqueeSpeed=speedOptions[speedIndex()];
 var settingsSection=0,marqueePauseUntil=0;
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
-function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');if(osd)osd.style.height=Math.max(156,Math.round(fontPx*5.8+90))+'px';}
+function resizeOsd(){
+  var panel=$('osd'),block=$('osdText');if(!panel||!block)return;
+  // Reserve enough vertical space for every text line and the progress bar.
+  var line=Math.ceil(fontPx*1.52),required=20+line*3+36+22;
+  panel.style.height=Math.min(window.innerHeight||1080,Math.max(156,required))+'px';
+  block.style.top='10px';block.style.bottom='12px';
+}
+function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');resizeOsd();}
 applyFont();
 function ensureSettingsUI(){
   // Installed Tizen widgets ship an older HTML shell; create the new controls in JS.
@@ -178,6 +185,7 @@ function info(){
   var c=channels[active];if(!c)return;
   text('osdName',c.name);var p=current(c),n=next(c);
   text('osdNow',p?p[2]:'Нет данных EPG');text('osdNext','Далее: '+(n?n[2]:'нет данных'));
+  resizeOsd();
   if(p){var time=Date.now(),width=Math.round(Math.max(0,Math.min(100,100*(time-p[0])/(p[1]-p[0]))));$('osdProgress').style.width=width+'%';text('osdLeft',remaining(p[1]-time));}else{$('osdProgress').style.width='0%';text('osdLeft','');}
 }
 function showOsd(){
@@ -186,6 +194,7 @@ function showOsd(){
   info();
   if(osdTimer){clearTimeout(osdTimer);osdTimer=null;}
   $('osd').className='show';
+  resizeOsd();
   osdTimer=setTimeout(function(){$('osd').className='';osdTimer=null;},5000);
 }
 function rect(){
