@@ -20,8 +20,11 @@ try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
 function resizeOsd(){
   var panel=$('osd'),block=$('osdText');if(!panel||!block)return;
   // Reserve enough vertical space for every text line and the progress bar.
-  var line=Math.ceil(fontPx*1.52),required=20+line*3+36+22;
-  panel.style.height=Math.min(window.innerHeight||1080,Math.max(156,required))+'px';
+  var line=Math.ceil(fontPx*1.5),required=10+line*3+28+4+12+14;
+  // CSS in the installed widget sets height:156px!important. Normal inline
+  // style.height loses to it, so the calculated height MUST be important too.
+  var viewport=document.documentElement.clientHeight||window.innerHeight||1080;
+  panel.style.setProperty('height',Math.min(viewport,Math.max(156,required))+'px','important');
   block.style.top='10px';block.style.bottom='12px';
 }
 function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');resizeOsd();}
@@ -280,7 +283,7 @@ window.AquaFast={key:key,onStatus:function(type,msg,w,h){
   if(type==='error')console.warn('AVPlay:',msg);
 }};
 document.addEventListener('keydown',function(e){var k=e.key;if(k==='Esc')k='Escape';if(k==='Escape'||k==='Backspace'||k==='Enter'||k.indexOf('Arrow')===0){e.preventDefault();key(k);}});
-window.addEventListener('resize',function(){rect();});
+window.addEventListener('resize',function(){resizeOsd();rect();});
 $('rows').addEventListener('click',function(e){var r=e.target;while(r&&r!==$('rows')&&!r.getAttribute('data-id'))r=r.parentNode;if(r&&r.getAttribute('data-id')){focus=Number(r.getAttribute('data-id'));mode(false);tune(focus);}});
 $('current').addEventListener('click',function(){zone='programmes';showFocus=0;details();});
 $('upcoming').addEventListener('click',function(e){var n=e.target;while(n&&n!==$('upcoming')&&!n.getAttribute('data-index'))n=n.parentNode;if(n&&n.getAttribute('data-index')){zone='programmes';showFocus=Number(n.getAttribute('data-index'));details();}});
