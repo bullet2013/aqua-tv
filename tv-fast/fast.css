@@ -151,3 +151,30 @@ body.focus-programmes .row.selected{outline:none!important}
 .current-programme-left{font-size:calc(var(--tv-font,18px) * .85);color:#5487a9;margin-top:7px}
 #osdLeft{width:145px!important;font-size:18px!important}
 #osdProgressRow{padding-right:165px!important}
+
+/* v16: saturated blue guide palette. Selected row is #1E90FF; surrounding UI is darker. */
+#guide{background:#083965!important}
+#channels,#rows,#right,#current,#upcoming{background:#115b9e!important;color:#fff!important}
+.row,.show-row{color:#fff!important;border-bottom-color:#0d4b84!important}
+.row.selected{background:#1E90FF!important;outline:2px solid #07376b!important;outline-offset:-2px!important}
+body.focus-programmes .row.selected{outline:none!important}
+#current.programme-selected,#upcoming .programme-selected{background:#1E90FF!important;color:#fff!important;outline:3px solid #07376b!important;outline-offset:-3px!important}
+.row .channel-name,.row .epg-current{color:#fff!important}
+.row .epg-following{color:#c5e0f5!important}
+.row .epg-separator{color:#8cbfe9!important}
+.current-programme-left{color:#c5e0f5!important}
+#preview{border-color:#0b4379!important;background:transparent!important}
+#categories{background:#0e508c!important;border-color:#083965!important}
+.cat{color:#fff!important}
+.cat.active,.cat[aria-selected="true"]{background:#1E90FF!important;color:#fff!important;border-color:#07376b!important}
+#details,#fontSettings{background:#115b9e!important;color:#fff!important;border-color:#07376b!important}
+#details h2,#fontSettings h2,#fontSettings h3{color:#fff!important}
+.font-setting-row.active,.speed-row.active{background:#1E90FF!important;border-color:#07376b!important;color:#fff!important}
+.speed-row,.font-setting-row{color:#fff!important}
+.speed-row:not(.active){background:#0e508c!important}
+.font-choice{background:#0e508c!important;color:#fff!important}
+.font-choice.selected{background:#1E90FF!important;color:#fff!important;border-color:#07376b!important}
+.row-epg-track{background:#083965!important}
+.row-epg-fill{background:#71c6ff!important}
+#osdLogo{background:transparent!important}
+#osdLogo img{background:transparent!important;object-fit:contain!important}
