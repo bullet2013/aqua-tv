@@ -154,7 +154,7 @@ body.focus-programmes .row.selected{outline:none!important}
 
 /* v16: saturated blue guide palette. Selected row is #1E90FF; surrounding UI is darker. */
 #guide{background:#083965!important}
-#channels,#rows,#right,#current,#upcoming{background:#115b9e!important;color:#fff!important}
+#channels,#rows,#right,#current,#upcoming{background:#0C4A83!important;color:#fff!important}
 .row,.show-row{color:#fff!important;border-bottom-color:#0d4b84!important}
 .row.selected{background:#1E90FF!important;outline:2px solid #07376b!important;outline-offset:-2px!important}
 body.focus-programmes .row.selected{outline:none!important}
@@ -167,7 +167,7 @@ body.focus-programmes .row.selected{outline:none!important}
 #categories{background:#0e508c!important;border-color:#083965!important}
 .cat{color:#fff!important}
 .cat.active,.cat[aria-selected="true"]{background:#1E90FF!important;color:#fff!important;border-color:#07376b!important}
-#details,#fontSettings{background:#115b9e!important;color:#fff!important;border-color:#07376b!important}
+#details,#fontSettings{background:#0C4A83!important;color:#fff!important;border-color:#07376b!important}
 #details h2,#fontSettings h2,#fontSettings h3{color:#fff!important}
 .font-setting-row.active,.speed-row.active{background:#1E90FF!important;border-color:#07376b!important;color:#fff!important}
 .speed-row,.font-setting-row{color:#fff!important}
@@ -215,12 +215,12 @@ body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!import
 /* v19: channel-list menu background matches the infobar; selection and other panels unchanged. */
 #guide #channels,#guide #rows,#guide #rows .row:not(.selected),#guide #categories{background-color:#061c35!important}
 
-/* v20: unified background, exactly matching the programme-description popup (#115b9e). */
+/* v20: unified background, exactly matching the programme-description popup (#0C4A83). */
 #osd,#guide #channels,#guide #rows,#guide #rows .row:not(.selected),
 #guide #current,#guide #upcoming,#guide #upcoming .show-row:not(.programme-selected),
 #guide #categories,#details,#fontSettings,
 #fontSettings .speed-row:not(.active),#fontSettings .font-choice:not(.selected){
-  background-color:#115b9e!important;
+  background-color:#0C4A83!important;
 }
 #guide #right,#guide{background-color:transparent!important}
 #guide #preview{background-color:transparent!important}
