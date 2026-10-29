@@ -214,3 +214,13 @@ body.focus-programmes #guide #rows .row.selected{background-color:#6495ED!import
 
 /* v19: channel-list menu background matches the infobar; selection and other panels unchanged. */
 #guide #channels,#guide #rows,#guide #rows .row:not(.selected),#guide #categories{background-color:#061c35!important}
+
+/* v20: unified background, exactly matching the programme-description popup (#115b9e). */
+#osd,#guide #channels,#guide #rows,#guide #rows .row:not(.selected),
+#guide #current,#guide #upcoming,#guide #upcoming .show-row:not(.programme-selected),
+#guide #categories,#details,#fontSettings,
+#fontSettings .speed-row:not(.active),#fontSettings .font-choice:not(.selected){
+  background-color:#115b9e!important;
+}
+#guide #right,#guide{background-color:transparent!important}
+#guide #preview{background-color:transparent!important}
