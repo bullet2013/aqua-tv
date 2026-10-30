@@ -33,7 +33,7 @@ await writeFile(resolve(output,'channels.json'),JSON.stringify(channels));
 const wanted=new Set(channels.map(c=>c.id).filter(Boolean));
 const guide=Object.create(null);
 const now=Date.now();
-const from=now-4*3600000,until=now+40*3600000;
+const from=now-4*3600000,until=now+48*3600000;
 const decoder=new TextDecoder('utf-8');
 function xmlTime(str){
   const m=String(str).match(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)?(?:\s*([+-])(\d\d)(\d\d))?/);
@@ -51,20 +51,27 @@ function entities(str){
     return Number.isFinite(code)&&code>0&&code<=0x10ffff?String.fromCodePoint(code):part;
   });
 }
+function epgClock(raw){
+  // Show exactly the start/end clock provided by the EPG source, not the
+  // possibly incorrect timezone of the Tizen JavaScript runtime.
+  const m=String(raw||'').match(/^\d{8}(\d{2})(\d{2})/);
+  return m ? m[1]+':'+m[2] : '';
+}
 function parse(block){
   const tag=/^<programme\b([^>]*)>/i.exec(block);
   if(!tag)return;
   const id=entities(attr(tag[1],'channel')).toLowerCase().trim();
   if(!wanted.has(id))return;
-  const start=xmlTime(attr(tag[1],'start'));
-  const stop=xmlTime(attr(tag[1],'stop'));
+  const startRaw=attr(tag[1],'start'),stopRaw=attr(tag[1],'stop');
+  const start=xmlTime(startRaw);
+  const stop=xmlTime(stopRaw);
   if(!Number.isFinite(start)||!Number.isFinite(stop)||stop<=from||start>=until||stop<=start)return;
   const title=/<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i.exec(block);
   if(!title)return;
   const name=entities(title[1].replace(/<[^>]+>/g,'')).trim();
   if(!name)return;
   if(!guide[id])guide[id]=[];
-  guide[id].push([start,stop,name]);
+  guide[id].push([start,stop,name,epgClock(startRaw),epgClock(stopRaw)]);
 }
 let buffer='',count=0;
 const stream=createReadStream(resolve(root,'epg-tv.xml.gz')).pipe(createGunzip());
@@ -89,7 +96,7 @@ for(const id of Object.keys(guide)){
   const current=list.findIndex(p=>p[0]<=now&&p[1]>now);
   const future=list.findIndex(p=>p[0]>now);
   const offset=current>=0?current:(future>=0?future:0);
-  trimmed[id]=list.slice(offset,offset+12);
+  trimmed[id]=list.slice(offset,offset+160);
 }
 await writeFile(resolve(output,'guide.json'),JSON.stringify({generatedAt:Date.now(),programmes:trimmed}));
 console.log('[AQUA FAST] '+channels.length+' channels, '+count+' XMLTV entries scanned, '+Object.keys(trimmed).length+' TV schedules');

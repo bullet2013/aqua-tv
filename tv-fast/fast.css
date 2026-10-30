@@ -349,3 +349,35 @@ html,body{background:transparent}
   background:transparent!important;
   background-color:transparent!important;
 }
+
+/* v38: old and new Tizen engines must not show black separators.
+   Keep #right transparent so Samsung AVPlay can render inside #preview. */
+#guide #right{
+  gap:0!important;
+  row-gap:0!important;
+  column-gap:0!important;
+  background:transparent!important;
+  background-color:transparent!important;
+}
+#guide #right>#preview,
+#guide #right>#current,
+#guide #right>#upcoming{
+  margin-top:0!important;
+  margin-bottom:0!important;
+}
+#guide #current,#guide #upcoming{
+  background-color:#0C4A83!important;
+}
+#guide #preview{
+  background:transparent!important;
+  background-color:transparent!important;
+}
+/* Explicit flex spacers enable centering 14px and 40px at both ends. */
+#fontChoices .font-scroll-spacer{
+  display:block!important;
+  padding:0!important;
+  margin:0!important;
+  height:1px!important;
+  flex-shrink:0!important;
+  -webkit-flex-shrink:0!important;
+}

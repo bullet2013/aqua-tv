@@ -3,6 +3,7 @@
 var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
 var pageStart=0,pageSize=0,pageGroup='',cachedGroup='',cachedList=null;
+var epgRequestBusy=false,lastEpgAttempt=0,lastEpgSuccess=0,epgGeneratedAt=0;
 var $=function(id){return document.getElementById(id);};
 var el=$;
 // Older widgets keep the OSD inside #full. Move it once at startup so its
@@ -51,9 +52,42 @@ function ensureSettingsUI(){
   if(speedRow.nextSibling!==nextRow)panel.insertBefore(nextRow,speedRow.nextSibling);
   var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
 }
-function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();}
+function openSettings(){
+  ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');
+  fontSelected=Math.max(0,fontOptions.indexOf(fontPx));
+  // Must become visible BEFORE measuring font option sizes on Samsung WebKit.
+  visible('fontSettings');
+  renderSettings();updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();
+}
 function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');var next=$('showNextRow');if(next)next.className='show-next-row'+(settingsSection===2?' active':'');}
-function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));if(i===fontSelected){var item=a;}}if(item){var left=item.offsetLeft-p.offsetLeft;p.scrollLeft=Math.max(0,left-(p.clientWidth-item.offsetWidth)/2);}}
+function centerSelectedFont(){
+  var p=$('fontChoices'),item=p.querySelector('.font-choice.selected');
+  if(!item||!p.clientWidth)return;
+  // Inserting physical spacers makes the first and last options centerable,
+  // even in old Tizen engines without scroll-padding support.
+  var pad=Math.max(0,Math.floor((p.clientWidth-item.offsetWidth)/2));
+  var first=p.firstChild,last=p.lastChild;
+  if(first&&first.className==='font-scroll-spacer'){
+    first.style.width=pad+'px';first.style.setProperty('flex','0 0 '+pad+'px','important');
+  }
+  if(last&&last.className==='font-scroll-spacer'){
+    last.style.width=pad+'px';last.style.setProperty('flex','0 0 '+pad+'px','important');
+  }
+  var bounds=p.getBoundingClientRect(),selected=item.getBoundingClientRect();
+  var distance=(selected.left+selected.width/2)-(bounds.left+bounds.width/2);
+  p.scrollLeft=Math.max(0,Math.round(p.scrollLeft+distance));
+}
+function renderSettings(){
+  var p=$('fontChoices');p.innerHTML='';
+  var before=add(p,'span','font-scroll-spacer','');
+  for(var i=0;i<fontOptions.length;i++){
+    var item=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');
+    item.setAttribute('data-font',String(fontOptions[i]));
+  }
+  var after=add(p,'span','font-scroll-spacer','');
+  // A hidden settings popup gives all elements a width of zero.
+  if(p.clientWidth)centerSelectedFont();
+}
 function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=speedNames[speedIndex()];}
 function setSpeed(delta){marqueeSpeed=speedOptions[Math.max(0,Math.min(2,speedIndex()+(delta>0?1:-1)))];try{localStorage.setItem('aqua-fast-scroll-speed',String(marqueeSpeed));}catch(ignore){}updateSpeedLabel();}
 function updateShowNextLabel(){var node=$('showNextValue');if(node)node.textContent=showNextInList?'Да':'Нет';}
@@ -77,7 +111,12 @@ function list(){if(cachedList&&cachedGroup===chosenGroup)return cachedList;cache
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
 function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч.'+(rest?' '+rest+'мин.':'')):(mins+'мин.');}
-function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+function fmt(ms,sourceClock){
+  // The source XMLTV programme carries its own broadcast wall-clock time.
+  // Tizen's JS timezone may differ from the TV Settings timezone.
+  if(typeof sourceClock==='string'&&/^\d\d:\d\d$/.test(sourceClock))return sourceClock;
+  var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
 function channelIdx(ch){return channels.indexOf(ch);}
@@ -289,7 +328,7 @@ function renderRight(data){
   shows=data.upcoming;
   rightProgrammeSignature=data.signature;
   var parent=$('upcoming');parent.innerHTML='';
-  for(var i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
+  for(var i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0],shows[i][3]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
@@ -305,7 +344,7 @@ function programme(){return showFocus===0?current(channels[focus]):shows[showFoc
 function descHash(id){var h=2166136261;for(var i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return (h>>>0).toString(16);}
 function details(){
   var c=channels[focus],p=programme();if(!p)return;
-  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0])+'–'+fmt(p[1])+' · '+c.name);text('detailBody','Загружаем описание…');
+  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0],p[3])+'–'+fmt(p[1],p[4])+' · '+c.name);text('detailBody','Загружаем описание…');
   var token=++descriptionToken,id=c.id,key=p[0]+'|'+p[1];
   fetchJson(base+'epg-tv-descriptions/'+descHash(id)+'.json',function(d){if(token!==descriptionToken||!popup)return;text('detailBody',d.id===id&&d.programmes&&d.programmes[key]?decodeXml(d.programmes[key]):'Описание отсутствует.');},function(){if(token===descriptionToken&&popup)text('detailBody','Описание недоступно.');});
 }
@@ -344,6 +383,7 @@ function mode(open){
   $('full').className=open?'hidden':'';
   if(!open)stopMarquee();
   if(open){
+    refreshGuide(false);
     $('osd').className='';
     zone='channels';showFocus=0;menu=false;
     document.body.classList.remove('focus-programmes');
@@ -439,21 +479,49 @@ $('upcoming').addEventListener('click',function(e){var n=e.target;while(n&&n!==$
 $('full').addEventListener('click',function(){mode(true);});
 $('osd').addEventListener('click',function(){mode(true);});
 $('preview').addEventListener('click',function(){mode(false);});
+// Refresh EPG while the TV application remains open for days. The hosted
+// guide is rebuilt daily by GitHub Actions; a cache-busting query bypasses
+// Samsung WebKit's long-lived cache for guide.json.
+function refreshGuide(force){
+  if(!channels.length||epgRequestBusy)return;
+  var now=Date.now();
+  var retry=lastEpgSuccess?30*60*1000:5*60*1000;
+  if(!force&&now-lastEpgAttempt<retry)return;
+  epgRequestBusy=true;lastEpgAttempt=now;
+  fetchJson(base+'tv-fast/guide.json?v='+now,function(d){
+    epgRequestBusy=false;
+    if(!d||!d.programmes||typeof d.programmes!=='object'){
+      console.warn('AQUA TV: invalid EPG response');return;
+    }
+    var stamp=Number(d.generatedAt)||now;
+    if(epgGeneratedAt&&stamp<epgGeneratedAt)return;
+    lastEpgSuccess=Date.now();
+    if(epgGeneratedAt===stamp)return;
+    epgGeneratedAt=stamp;guide=d.programmes;
+    if(showGuide){
+      ensureVisiblePage();
+      updateRows();
+      renderRight();
+    }else if($('osd').className==='show')info();
+  },function(error){
+    epgRequestBusy=false;
+    console.warn('AQUA TV: EPG refresh failed:',error);
+  });
+}
 function boot(){
   fetchJson(base+'tv-fast/channels.json',function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
     focus=active;cachedList=null;logoOsd(data[active]);syncCategoryHeader();
     $('loading').className='hidden';rect();tune(active);
-    // EPG is fetched AFTER the interface becomes usable.
-    fetchJson(base+'tv-fast/guide.json',function(d){
-      guide=d.programmes||{};if(showGuide){ensureVisiblePage();updateRows();renderRight();}else if($('osd').className==='show')info();
-    },function(e){text('current','Ошибка EPG: '+e);});
+    // Download EPG only after playback starts, and keep refreshing it later.
+    refreshGuide(true);
   },function(error){console.warn('AQUA TV: playlist unavailable:',error);});
 }
 $('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
 setInterval(function(){
   if(!channels.length)return;
+  refreshGuide(false);
   if(showGuide){
     ensureVisiblePage();
     updateRows();
