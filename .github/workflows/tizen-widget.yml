@@ -13,6 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate transparent launcher icon (117x117)
+        run: |
+          python3 -m pip install --quiet cairosvg
+          python3 - <<'PY'
+          from pathlib import Path
+          import cairosvg,struct
+          cairosvg.svg2png(url='tizen/icon.svg',write_to='tizen/icon.png',output_width=117,output_height=117)
+          data=Path('tizen/icon.png').read_bytes()
+          assert data[:8]==bytes.fromhex('89504e470d0a1a0a')
+          assert struct.unpack('>II',data[16:24])==(117,117)
+          assert data[25]==6, 'Expected RGBA PNG with alpha'
+          PY
       - name: Validate widget resources
         run: |
           python3 - <<'PY'
@@ -20,7 +32,7 @@ jobs:
           import xml.etree.ElementTree as ET
           path=Path('tizen')
           ET.parse(path/'config.xml')
-          for name in ('index.html','bridge.js','config.js'):
+          for name in ('index.html','fast-bridge.js','icon.png'):
               assert (path/name).is_file(), name
           assert 'window.AquaBridge' in (path/'fast-bridge.js').read_text()
           assert 'webapis.avplay' in (path/'fast-bridge.js').read_text()
@@ -31,9 +43,9 @@ jobs:
       - name: Package unsigned widget source
         run: |
           cd tizen
-          zip -q -9 ../AQUA-TV-Tizen-UNSIGNED.wgt config.xml index.html fast-bridge.js
+          zip -q -9 ../AQUA-TV-Tizen-UNSIGNED.wgt config.xml index.html fast-bridge.js icon.png
           unzip -l ../AQUA-TV-Tizen-UNSIGNED.wgt
-          test $(wc -c < ../AQUA-TV-Tizen-UNSIGNED.wgt) -lt 30000
+          test $(wc -c < ../AQUA-TV-Tizen-UNSIGNED.wgt) -lt 60000
       - uses: actions/upload-artifact@v4
         with:
           name: AQUA-TV-Tizen-widget-unsigned
