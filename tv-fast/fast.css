@@ -319,3 +319,7 @@ html,body{--aqua-font:var(--tv-font,18px)}
 #fontSettings .show-next-row{display:block!important;visibility:visible!important;margin:6px 0 10px!important;padding:11px 12px!important;background:#0C4A83!important;color:#fff!important;border:2px solid transparent!important;font-size:var(--tv-font,18px)!important;line-height:1.25!important}
 #fontSettings .show-next-row strong{font-size:var(--tv-font,18px)!important}
 #fontSettings .show-next-row.active{background:#17609A!important;border-color:#E0FFFF!important}
+
+/* v35: completely black, silent startup; never flash blue or loading text. */
+#loading{background:#000!important;color:transparent!important;font-size:0!important;line-height:0!important;z-index:9999!important;box-shadow:none!important}
+html,body{background:transparent}

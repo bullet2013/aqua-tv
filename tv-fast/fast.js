@@ -449,7 +449,7 @@ function boot(){
     fetchJson(base+'tv-fast/guide.json',function(d){
       guide=d.programmes||{};if(showGuide){ensureVisiblePage();updateRows();renderRight();}else if($('osd').className==='show')info();
     },function(e){text('current','Ошибка EPG: '+e);});
-  },function(error){text('loading','Ошибка плейлиста: '+error);});
+  },function(error){console.warn('AQUA TV: playlist unavailable:',error);});
 }
 $('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
 setInterval(function(){
