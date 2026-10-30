@@ -323,3 +323,29 @@ html,body{--aqua-font:var(--tv-font,18px)}
 /* v35: completely black, silent startup; never flash blue or loading text. */
 #loading{background:#000!important;color:transparent!important;font-size:0!important;line-height:0!important;z-index:9999!important;box-shadow:none!important}
 html,body{background:transparent}
+
+/* v36: older Tizen WebKit ignores flex gap, newer sets show its 8px gap.
+   Force the two main columns to meet on every TV without covering AVPlay. */
+#guide{
+  gap:0!important;
+  column-gap:0!important;
+  row-gap:0!important;
+}
+#guide #channels{
+  width:62%!important;
+  max-width:62%!important;
+  -webkit-flex:0 0 62%!important;
+  flex:0 0 62%!important;
+}
+#guide #right{
+  width:38%!important;
+  max-width:38%!important;
+  -webkit-flex:1 1 0!important;
+  flex:1 1 0!important;
+  margin-left:0!important;
+}
+/* The preview must remain see-through for native AVPlay video. */
+#guide #preview{
+  background:transparent!important;
+  background-color:transparent!important;
+}
