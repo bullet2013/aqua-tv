@@ -3,6 +3,7 @@
 var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
 var pageStart=0,pageSize=0,pageGroup='',cachedGroup='',cachedList=null;
+var fullscreenDetails=false;
 var epgRequestBusy=false,lastEpgAttempt=0,lastEpgSuccess=0,epgGeneratedAt=0;
 var $=function(id){return document.getElementById(id);};
 var el=$;
@@ -27,7 +28,9 @@ function resizeOsd(){
   // CSS in the installed widget sets height:156px!important. Normal inline
   // style.height loses to it, so the calculated height MUST be important too.
   var viewport=document.documentElement.clientHeight||window.innerHeight||1080;
-  panel.style.setProperty('height',Math.min(viewport,Math.max(156,required))+'px','important');
+  var osdHeight=Math.min(viewport,Math.max(156,required));
+  panel.style.setProperty('height',osdHeight+'px','important');
+  document.body.style.setProperty('--aqua-osd-height',osdHeight+'px');
   block.style.top='10px';block.style.bottom='12px';
 }
 function applyFont(){fontPx=Math.max(14,Math.min(40,fontPx));document.documentElement.style.fontSize=fontPx+'px';document.body.style.setProperty('--tv-font',fontPx+'px');resizeOsd();if(showGuide)ensureVisiblePage();}
@@ -342,11 +345,36 @@ function updateProgrammeFocus(){
 }
 function programme(){return showFocus===0?current(channels[focus]):shows[showFocus-1];}
 function descHash(id){var h=2166136261;for(var i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return (h>>>0).toString(16);}
-function details(){
-  var c=channels[focus],p=programme();if(!p)return;
-  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0],p[3])+'–'+fmt(p[1],p[4])+' · '+c.name);text('detailBody','Загружаем описание…');
-  var token=++descriptionToken,id=c.id,key=p[0]+'|'+p[1];
+function details(channel,selectedProgramme){
+  // In fullscreen use the tuned channel, not a stale guide cursor.
+  var c=channel||channels[focus],p=channel?selectedProgramme:programme();
+  if(!c||showGuide&&!p)return;
+  fullscreenDetails=!showGuide;
+  if(fullscreenDetails){
+    clearOsdTimer();
+    info();
+    $('osd').className='show';
+    resizeOsd();
+  }
+  popup=true;
+  document.body.classList.add('popup-active');
+  document.body.classList.toggle('fullscreen-details',fullscreenDetails);
+  visible('details');
+  text('detailTitle',p?p[2]:'Нет данных EPG');
+  text('detailTime',p?fmt(p[0],p[3])+'–'+fmt(p[1],p[4])+' · '+c.name:c.name);
+  text('detailBody',p?'Загружаем описание…':'Описание текущей передачи недоступно.');
+  var token=++descriptionToken;
+  if(!p)return;
+  var id=c.id,key=p[0]+'|'+p[1];
   fetchJson(base+'epg-tv-descriptions/'+descHash(id)+'.json',function(d){if(token!==descriptionToken||!popup)return;text('detailBody',d.id===id&&d.programmes&&d.programmes[key]?decodeXml(d.programmes[key]):'Описание отсутствует.');},function(){if(token===descriptionToken&&popup)text('detailBody','Описание недоступно.');});
+}
+function closeDetails(){
+  var wasFullscreen=fullscreenDetails;
+  popup=false;fullscreenDetails=false;descriptionToken++;
+  document.body.classList.remove('popup-active');
+  document.body.classList.remove('fullscreen-details');
+  hide('details');
+  if(wasFullscreen&&!showGuide)showOsd(); // restart five-second timeout
 }
 function decodeXml(str){var t=document.createElement('textarea');t.innerHTML=str;return t.value;}
 function logoOsd(c){var area=$('osdLogo');area.innerHTML='';var i=add(area,'img','');i.src=c.logo||'';i.onerror=function(){this.style.display='none';};}
@@ -357,14 +385,23 @@ function info(){
   resizeOsd();
   if(p){var time=Date.now(),width=Math.round(Math.max(0,Math.min(100,100*(time-p[0])/(p[1]-p[0]))));$('osdProgress').style.width=width+'%';text('osdLeft',remaining(p[1]-time));}else{$('osdProgress').style.width='0%';text('osdLeft','');}
 }
-function showOsd(){
-  // Keep the OSD visible in fullscreen. The old five-second timeout made
-  // users think it was missing and hid the stream resolution entirely.
-  info();
+function clearOsdTimer(){
   if(osdTimer){clearTimeout(osdTimer);osdTimer=null;}
+}
+function hideOsd(){
+  clearOsdTimer();
+  $('osd').className='';
+}
+function showOsd(){
+  info();
+  clearOsdTimer();
   $('osd').className='show';
   resizeOsd();
-  osdTimer=setTimeout(function(){$('osd').className='';osdTimer=null;},5000);
+  // The OSD must remain visible as long as fullscreen description is open.
+  if(!fullscreenDetails)osdTimer=setTimeout(function(){
+    if(!fullscreenDetails&&!showGuide)$('osd').className='';
+    osdTimer=null;
+  },5000);
 }
 function rect(){
   var preview=showGuide?$('preview'):null;
@@ -384,7 +421,10 @@ function mode(open){
   if(!open)stopMarquee();
   if(open){
     refreshGuide(false);
-    $('osd').className='';
+    hideOsd();
+    // Browsing other categories never changes playback. Always reopen on
+    // the *playing* channel; restore its category if the current filter hides it.
+    focus=active;
     zone='channels';showFocus=0;menu=false;
     document.body.classList.remove('focus-programmes');
     hide('categories');
@@ -402,7 +442,12 @@ function mode(open){
     // renderRight also refreshes row focus, so no second navFocus pass.
     renderRight();
   }
-  else showOsd();
+  else {
+    menu=false;
+    hide('categories');
+    document.body.classList.remove('focus-programmes');
+    showOsd();
+  }
   // No DOM reparenting. Never rebuild channels/EPG here.
   rect();
 }
@@ -416,10 +461,14 @@ function tune(index){
 }
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
-  if(popup){popup=false;descriptionToken++;document.body.classList.remove('popup-active');hide('details');return;}
-  if(menu){menu=false;hide('categories');return;}
-  if(showGuide){send({type:'exit'});return;}
-  mode(true);
+  if(popup){closeDetails();return;}
+  // Back from any list/category/programme focus returns to live TV without
+  // tuning the highlighted channel.
+  if(showGuide){mode(false);return;}
+  // Two separate Back presses can dismiss description, then the infobar.
+  if($('osd').className==='show'){hideOsd();return;}
+  // Only a clean fullscreen video (no popup or OSD) exits the widget.
+  send({type:'exit'});
 }
 function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
@@ -438,7 +487,11 @@ function key(k){
     return;
   }
   if(k==='Enter'){
-    if(popup){back();return;}
+    if(popup){
+      if(fullscreenDetails){closeDetails();mode(true);}
+      else back();
+      return;
+    }
     if(!showGuide){mode(true);return;}
     if(menu){if(catFocus===groups.length){openSettings();return;}chosenGroup=groups[catFocus];menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
     if(zone==='channels'){tune(focus);mode(false);return;}
@@ -451,7 +504,12 @@ function key(k){
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
   }
   if(k==='ArrowRight'){
-    if(!showGuide||popup)return;
+    if(popup)return;
+    if(!showGuide){
+      if($('osd').className==='show')details(channels[active],current(channels[active]));
+      else showOsd();
+      return;
+    }
     if(menu){menu=false;hide('categories');zone='channels';navFocus();return;}
     zone='programmes';showFocus=0;updateProgrammeFocus();return;
   }
