@@ -1,0 +1,26 @@
+/* Tizen TV: fixed 1920x1080 style canvas, fallbacks for old WebKit. */
+html,body{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important}
+.fullscreen-stage,.guide-view,.startup,.font-settings{position:fixed!important;top:0!important;right:0!important;bottom:0!important;left:0!important;width:100%!important;height:100%!important;box-sizing:border-box!important}
+.startup,.font-settings{display:-webkit-flex;display:flex;align-items:center;justify-content:center}
+.startup-card{width:420px!important;max-width:calc(100% - 40px)!important;margin:auto!important;box-sizing:border-box!important}
+.startup-symbol{display:-webkit-flex;display:flex;align-items:center;justify-content:center}
+.guide-layout{display:-webkit-flex!important;display:flex!important;flex-direction:row!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;padding:12px!important}
+.channels-panel{width:56%!important;flex:0 0 56%!important;min-width:0!important;min-height:0!important}
+.right-panel{width:44%!important;flex:1 1 44%!important;min-width:0!important;min-height:0!important;display:flex!important;flex-direction:column!important}
+.categories-panel{position:absolute!important;top:12px!important;left:12px!important;bottom:12px!important}
+.preview-slot{position:relative!important;min-height:180px!important;flex:0 0 42%!important}
+.preview-meta{flex:0 0 auto!important}
+.program-list{flex:1 1 auto!important;min-height:0!important;overflow:auto!important}
+.schedule-row{display:-webkit-flex!important;display:flex!important;align-items:center!important}
+.schedule-time{flex:0 0 54px!important}
+.schedule-copy{flex:1 1 auto!important;min-width:0!important}
+html.aqua-native-android,html.aqua-native-android body{background:transparent!important}
+html.aqua-native-android .guide-view{background:transparent!important}
+html.aqua-native-android .guide-view:before{display:none!important}
+html.aqua-native-android .right-panel{background:rgba(245,252,255,.96)!important;border:1px solid rgba(255,255,255,.8)!important;border-radius:16px!important}
+html.aqua-native-android .right-panel:before{display:none!important}
+html.aqua-native-android .fullscreen-stage,html.aqua-native-android .video-shell,html.aqua-native-android .preview-slot{background:transparent!important}
+html.aqua-native-android .video-shell video{display:none!important}
+html.aqua-native-android .player-placeholder{display:none!important}
+html.aqua-legacy-browser .row-scroll-track,html.aqua-legacy-browser .row-name-track{animation:none!important;will-change:auto!important}
+@media(max-width:850px){.guide-layout{display:flex!important;flex-direction:row!important}.channels-panel{width:56%!important;flex:0 0 56%!important}.right-panel{width:44%!important;flex:1 1 44%!important}}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://bullet2013.github.io/aqua-tv/tizen"
+        version="0.1.2"
+        viewmodes="fullscreen">
+  <name>AQUA TV</name>
+  <description>IPTV player with native Samsung AVPlay and the AQUA TV website UI</description>
+  <content src="index.html"/>
+  <icon src="icon.png"/>
+  <tizen:application id="AQUATV0001.AquaTV" package="AQUATV0001" required_version="2.3"/>
+  <tizen:profile name="tv"/>
+  <tizen:setting screen-orientation="landscape"
+                 context-menu="disable"
+                 pointing-device-support="disable"
+                 background-support="disable"/>
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.audio"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- Test build: all playlist logo / metadata hosts; actual playable streams
+       are restricted to the configured provider inside the AVPlay bridge. -->
+  <access origin="*" subdomains="true"/>
+  <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; media-src * blob:</tizen:content-security-policy>
+</widget>
+
