@@ -33,7 +33,7 @@ await writeFile(resolve(output,'channels.json'),JSON.stringify(channels));
 const wanted=new Set(channels.map(c=>c.id).filter(Boolean));
 const guide=Object.create(null);
 const now=Date.now();
-const from=now-4*3600000,until=now+40*3600000;
+const from=now-4*3600000,until=now+48*3600000;
 const decoder=new TextDecoder('utf-8');
 function xmlTime(str){
   const m=String(str).match(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)?(?:\s*([+-])(\d\d)(\d\d))?/);
@@ -89,7 +89,7 @@ for(const id of Object.keys(guide)){
   const current=list.findIndex(p=>p[0]<=now&&p[1]>now);
   const future=list.findIndex(p=>p[0]>now);
   const offset=current>=0?current:(future>=0?future:0);
-  trimmed[id]=list.slice(offset,offset+12);
+  trimmed[id]=list.slice(offset,offset+160);
 }
 await writeFile(resolve(output,'guide.json'),JSON.stringify({generatedAt:Date.now(),programmes:trimmed}));
 console.log('[AQUA FAST] '+channels.length+' channels, '+count+' XMLTV entries scanned, '+Object.keys(trimmed).length+' TV schedules');
