@@ -3,6 +3,7 @@
 var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
 var pageStart=0,pageSize=0,pageGroup='',cachedGroup='',cachedList=null;
+var epgRequestBusy=false,lastEpgAttempt=0,lastEpgSuccess=0,epgGeneratedAt=0;
 var $=function(id){return document.getElementById(id);};
 var el=$;
 // Older widgets keep the OSD inside #full. Move it once at startup so its
@@ -344,6 +345,7 @@ function mode(open){
   $('full').className=open?'hidden':'';
   if(!open)stopMarquee();
   if(open){
+    refreshGuide(false);
     $('osd').className='';
     zone='channels';showFocus=0;menu=false;
     document.body.classList.remove('focus-programmes');
@@ -439,21 +441,49 @@ $('upcoming').addEventListener('click',function(e){var n=e.target;while(n&&n!==$
 $('full').addEventListener('click',function(){mode(true);});
 $('osd').addEventListener('click',function(){mode(true);});
 $('preview').addEventListener('click',function(){mode(false);});
+// Refresh EPG while the TV application remains open for days. The hosted
+// guide is rebuilt daily by GitHub Actions; a cache-busting query bypasses
+// Samsung WebKit's long-lived cache for guide.json.
+function refreshGuide(force){
+  if(!channels.length||epgRequestBusy)return;
+  var now=Date.now();
+  var retry=lastEpgSuccess?30*60*1000:5*60*1000;
+  if(!force&&now-lastEpgAttempt<retry)return;
+  epgRequestBusy=true;lastEpgAttempt=now;
+  fetchJson(base+'tv-fast/guide.json?v='+now,function(d){
+    epgRequestBusy=false;
+    if(!d||!d.programmes||typeof d.programmes!=='object'){
+      console.warn('AQUA TV: invalid EPG response');return;
+    }
+    var stamp=Number(d.generatedAt)||now;
+    if(epgGeneratedAt&&stamp<epgGeneratedAt)return;
+    lastEpgSuccess=Date.now();
+    if(epgGeneratedAt===stamp)return;
+    epgGeneratedAt=stamp;guide=d.programmes;
+    if(showGuide){
+      ensureVisiblePage();
+      updateRows();
+      renderRight();
+    }else if($('osd').className==='show')info();
+  },function(error){
+    epgRequestBusy=false;
+    console.warn('AQUA TV: EPG refresh failed:',error);
+  });
+}
 function boot(){
   fetchJson(base+'tv-fast/channels.json',function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
     focus=active;cachedList=null;logoOsd(data[active]);syncCategoryHeader();
     $('loading').className='hidden';rect();tune(active);
-    // EPG is fetched AFTER the interface becomes usable.
-    fetchJson(base+'tv-fast/guide.json',function(d){
-      guide=d.programmes||{};if(showGuide){ensureVisiblePage();updateRows();renderRight();}else if($('osd').className==='show')info();
-    },function(e){text('current','Ошибка EPG: '+e);});
+    // Download EPG only after playback starts, and keep refreshing it later.
+    refreshGuide(true);
   },function(error){console.warn('AQUA TV: playlist unavailable:',error);});
 }
 $('fontChoices').addEventListener('click',function(e){var node=e.target;while(node&&node!==$('fontChoices')&&!node.getAttribute('data-font'))node=node.parentNode;if(node&&node.getAttribute('data-font')){fontSelected=fontOptions.indexOf(Number(node.getAttribute('data-font')));chooseFont();}});
 setInterval(function(){
   if(!channels.length)return;
+  refreshGuide(false);
   if(showGuide){
     ensureVisiblePage();
     updateRows();
