@@ -52,9 +52,42 @@ function ensureSettingsUI(){
   if(speedRow.nextSibling!==nextRow)panel.insertBefore(nextRow,speedRow.nextSibling);
   var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
 }
-function openSettings(){ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');fontSelected=Math.max(0,fontOptions.indexOf(fontPx));renderSettings();visible('fontSettings');updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();}
+function openSettings(){
+  ensureSettingsUI();settings=true;settingsSection=0;menu=false;hide('categories');
+  fontSelected=Math.max(0,fontOptions.indexOf(fontPx));
+  // Must become visible BEFORE measuring font option sizes on Samsung WebKit.
+  visible('fontSettings');
+  renderSettings();updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();
+}
 function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');var next=$('showNextRow');if(next)next.className='show-next-row'+(settingsSection===2?' active':'');}
-function renderSettings(){var p=$('fontChoices');p.innerHTML='';for(var i=0;i<fontOptions.length;i++){var a=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');a.setAttribute('data-font',String(fontOptions[i]));if(i===fontSelected){var item=a;}}if(item){var left=item.offsetLeft-p.offsetLeft;p.scrollLeft=Math.max(0,left-(p.clientWidth-item.offsetWidth)/2);}}
+function centerSelectedFont(){
+  var p=$('fontChoices'),item=p.querySelector('.font-choice.selected');
+  if(!item||!p.clientWidth)return;
+  // Inserting physical spacers makes the first and last options centerable,
+  // even in old Tizen engines without scroll-padding support.
+  var pad=Math.max(0,Math.floor((p.clientWidth-item.offsetWidth)/2));
+  var first=p.firstChild,last=p.lastChild;
+  if(first&&first.className==='font-scroll-spacer'){
+    first.style.width=pad+'px';first.style.setProperty('flex','0 0 '+pad+'px','important');
+  }
+  if(last&&last.className==='font-scroll-spacer'){
+    last.style.width=pad+'px';last.style.setProperty('flex','0 0 '+pad+'px','important');
+  }
+  var bounds=p.getBoundingClientRect(),selected=item.getBoundingClientRect();
+  var distance=(selected.left+selected.width/2)-(bounds.left+bounds.width/2);
+  p.scrollLeft=Math.max(0,Math.round(p.scrollLeft+distance));
+}
+function renderSettings(){
+  var p=$('fontChoices');p.innerHTML='';
+  var before=add(p,'span','font-scroll-spacer','');
+  for(var i=0;i<fontOptions.length;i++){
+    var item=add(p,'div','font-choice'+(i===fontSelected?' selected':''),fontOptions[i]+' px');
+    item.setAttribute('data-font',String(fontOptions[i]));
+  }
+  var after=add(p,'span','font-scroll-spacer','');
+  // A hidden settings popup gives all elements a width of zero.
+  if(p.clientWidth)centerSelectedFont();
+}
 function updateSpeedLabel(){var x=$('scrollSpeedValue');if(x)x.textContent=speedNames[speedIndex()];}
 function setSpeed(delta){marqueeSpeed=speedOptions[Math.max(0,Math.min(2,speedIndex()+(delta>0?1:-1)))];try{localStorage.setItem('aqua-fast-scroll-speed',String(marqueeSpeed));}catch(ignore){}updateSpeedLabel();}
 function updateShowNextLabel(){var node=$('showNextValue');if(node)node.textContent=showNextInList?'Да':'Нет';}
@@ -78,7 +111,12 @@ function list(){if(cachedList&&cachedGroup===chosenGroup)return cachedList;cache
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
 function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч.'+(rest?' '+rest+'мин.':'')):(mins+'мин.');}
-function fmt(ms){var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+function fmt(ms,sourceClock){
+  // The source XMLTV programme carries its own broadcast wall-clock time.
+  // Tizen's JS timezone may differ from the TV Settings timezone.
+  if(typeof sourceClock==='string'&&/^\d\d:\d\d$/.test(sourceClock))return sourceClock;
+  var d=new Date(ms);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
 function make(tag,cls){var e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function add(parent,tag,cls,value){var e=make(tag,cls);if(value!==undefined)e.textContent=value;parent.appendChild(e);return e;}
 function channelIdx(ch){return channels.indexOf(ch);}
@@ -290,7 +328,7 @@ function renderRight(data){
   shows=data.upcoming;
   rightProgrammeSignature=data.signature;
   var parent=$('upcoming');parent.innerHTML='';
-  for(var i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
+  for(var i=0;i<shows.length;i++){var item=make('div','show-row'+(zone==='programmes'&&showFocus===i+1?' selected':''));add(item,'span','time',fmt(shows[i][0],shows[i][3]));add(item,'span','programme-name',shows[i][2]);item.setAttribute('data-index',String(i+1));parent.appendChild(item);}
   updateProgrammeFocus();
 }
 function updateProgrammeFocus(){
@@ -306,7 +344,7 @@ function programme(){return showFocus===0?current(channels[focus]):shows[showFoc
 function descHash(id){var h=2166136261;for(var i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return (h>>>0).toString(16);}
 function details(){
   var c=channels[focus],p=programme();if(!p)return;
-  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0])+'–'+fmt(p[1])+' · '+c.name);text('detailBody','Загружаем описание…');
+  popup=true;document.body.classList.add('popup-active');visible('details');text('detailTitle',p[2]);text('detailTime',fmt(p[0],p[3])+'–'+fmt(p[1],p[4])+' · '+c.name);text('detailBody','Загружаем описание…');
   var token=++descriptionToken,id=c.id,key=p[0]+'|'+p[1];
   fetchJson(base+'epg-tv-descriptions/'+descHash(id)+'.json',function(d){if(token!==descriptionToken||!popup)return;text('detailBody',d.id===id&&d.programmes&&d.programmes[key]?decodeXml(d.programmes[key]):'Описание отсутствует.');},function(){if(token===descriptionToken&&popup)text('detailBody','Описание недоступно.');});
 }
