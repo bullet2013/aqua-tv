@@ -51,20 +51,27 @@ function entities(str){
     return Number.isFinite(code)&&code>0&&code<=0x10ffff?String.fromCodePoint(code):part;
   });
 }
+function epgClock(raw){
+  // Show exactly the start/end clock provided by the EPG source, not the
+  // possibly incorrect timezone of the Tizen JavaScript runtime.
+  const m=String(raw||'').match(/^\d{8}(\d{2})(\d{2})/);
+  return m ? m[1]+':'+m[2] : '';
+}
 function parse(block){
   const tag=/^<programme\b([^>]*)>/i.exec(block);
   if(!tag)return;
   const id=entities(attr(tag[1],'channel')).toLowerCase().trim();
   if(!wanted.has(id))return;
-  const start=xmlTime(attr(tag[1],'start'));
-  const stop=xmlTime(attr(tag[1],'stop'));
+  const startRaw=attr(tag[1],'start'),stopRaw=attr(tag[1],'stop');
+  const start=xmlTime(startRaw);
+  const stop=xmlTime(stopRaw);
   if(!Number.isFinite(start)||!Number.isFinite(stop)||stop<=from||start>=until||stop<=start)return;
   const title=/<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i.exec(block);
   if(!title)return;
   const name=entities(title[1].replace(/<[^>]+>/g,'')).trim();
   if(!name)return;
   if(!guide[id])guide[id]=[];
-  guide[id].push([start,stop,name]);
+  guide[id].push([start,stop,name,epgClock(startRaw),epgClock(stopRaw)]);
 }
 let buffer='',count=0;
 const stream=createReadStream(resolve(root,'epg-tv.xml.gz')).pipe(createGunzip());
