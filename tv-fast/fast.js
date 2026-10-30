@@ -459,6 +459,18 @@ function tune(index){
   logoOsd(channels[index]);if(changed||!tune.started){tune.started=true;send({type:'play',url:channels[index].url});}
   if(showGuide){renderRight();}else showOsd();
 }
+// Fullscreen channel zapping is confined to the category selected in the
+// guide. The existing remote mapping is Up=next, Down=previous.
+function zapWithinCategory(step){
+  var available=list();
+  if(!available.length)return;
+  var position=available.indexOf(channels[active]);
+  // When the viewer browsed another category but left without OK, playback
+  // was not changed. The first zapping key enters that category from its edge.
+  var nextPosition=position<0?(step>0?0:available.length-1):(position+step+available.length)%available.length;
+  var nextIndex=channelIdx(available[nextPosition]);
+  if(nextIndex>=0)tune(nextIndex);
+}
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
   if(popup){closeDetails();return;}
@@ -498,7 +510,7 @@ function key(k){
     details();return;
   }
   if(k==='ArrowLeft'){
-    if(!showGuide){showOsd();return;}
+    if(!showGuide)return;
     if(popup)return;
     if(zone==='programmes'){zone='channels';updateProgrammeFocus();return;}
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
@@ -516,7 +528,7 @@ function key(k){
   if(k==='ArrowUp'||k==='ArrowDown'){
     if(popup)return;
     var d=k==='ArrowDown'?1:-1;
-    if(!showGuide){var id=(active-d+channels.length)%channels.length;tune(id);return;}
+    if(!showGuide){zapWithinCategory(-d);return;}
     if(menu){catFocus=(catFocus+d+groups.length+1)%(groups.length+1);categoryMenu();return;}
     if(zone==='channels'){
       var arr=list(),index=arr.indexOf(channels[focus]);
