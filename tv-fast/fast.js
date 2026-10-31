@@ -111,6 +111,11 @@ function request(url,done,fail){var x=new XMLHttpRequest();x.open('GET',url,true
 function fetchJson(url,done,fail){request(url,function(raw){try{done(JSON.parse(raw));}catch(e){if(fail)fail('Invalid JSON');}},fail);}
 function contains(list,id){return list.indexOf(id)>=0;}
 function list(){if(cachedList&&cachedGroup===chosenGroup)return cachedList;cachedGroup=chosenGroup;cachedList=chosenGroup==='Все'?channels:channels.filter(function(x){return x.group===chosenGroup;});return cachedList;}
+function setCategory(name){
+  if(!name||!contains(groups,name))name='Все';
+  chosenGroup=name;
+  try{localStorage.setItem('aqua-fast-category',chosenGroup);}catch(ignore){}
+}
 function current(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]<=now&&arr[i][1]>now)return arr[i];return null;}
 function next(ch){var arr=guide[ch&&ch.id]||[],now=Date.now();for(var i=0;i<arr.length;i++)if(arr[i][0]>now)return arr[i];return null;}
 function remaining(ms){var mins=Math.ceil(Math.max(0,ms)/60000),hours=Math.floor(mins/60),rest=mins%60;return hours?(hours+'ч.'+(rest?' '+rest+'мин.':'')):(mins+'мин.');}
@@ -368,13 +373,13 @@ function details(channel,selectedProgramme){
   var id=c.id,key=p[0]+'|'+p[1];
   fetchJson(base+'epg-tv-descriptions/'+descHash(id)+'.json',function(d){if(token!==descriptionToken||!popup)return;text('detailBody',d.id===id&&d.programmes&&d.programmes[key]?decodeXml(d.programmes[key]):'Описание отсутствует.');},function(){if(token===descriptionToken&&popup)text('detailBody','Описание недоступно.');});
 }
-function closeDetails(){
+function closeDetails(restoreInfobar){
   var wasFullscreen=fullscreenDetails;
   popup=false;fullscreenDetails=false;descriptionToken++;
   document.body.classList.remove('popup-active');
   document.body.classList.remove('fullscreen-details');
   hide('details');
-  if(wasFullscreen&&!showGuide)showOsd(); // restart five-second timeout
+  if(wasFullscreen&&!showGuide&&restoreInfobar!==false)showOsd(); // restart five-second timeout
 }
 function decodeXml(str){var t=document.createElement('textarea');t.innerHTML=str;return t.value;}
 function logoOsd(c){var area=$('osdLogo');area.innerHTML='';var i=add(area,'img','');i.src=c.logo||'';i.onerror=function(){this.style.display='none';};}
@@ -431,7 +436,7 @@ function mode(open){
     // Fullscreen channel changes alter focus without updating the hidden EPG.
     // Rebuild the channel category only if the tuned channel is filtered out.
     if(channels[focus]&&list().indexOf(channels[focus])<0){
-      chosenGroup=channels[focus].group||'Все';
+      setCategory(channels[focus].group||'Все');
       allRows();
     }else{
       syncCategoryHeader();
@@ -493,9 +498,19 @@ function closeExitConfirm(){
   var dialog=$('exitConfirm');
   if(dialog)dialog.className='exit-confirm hidden';
 }
+function openGuideFromFullscreen(){
+  // Left and OK have exactly the same behaviour, including an open EPG popup.
+  if(fullscreenDetails)closeDetails(false);
+  mode(true); // hides any visible infobar and restores the tuned channel focus
+}
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
-  if(popup){closeDetails();return;}
+  if(popup){
+    var wasFullscreen=fullscreenDetails;
+    closeDetails(false);
+    if(wasFullscreen)hideOsd(); // one Back closes BOTH description and infobar
+    return;
+  }
   // Back from any list/category/programme focus returns to live TV without
   // tuning the highlighted channel.
   if(showGuide){mode(false);return;}
@@ -527,17 +542,17 @@ function key(k){
   }
   if(k==='Enter'){
     if(popup){
-      if(fullscreenDetails){closeDetails();mode(true);}
+      if(fullscreenDetails)openGuideFromFullscreen();
       else back();
       return;
     }
-    if(!showGuide){mode(true);return;}
-    if(menu){if(catFocus===groups.length){openSettings();return;}chosenGroup=groups[catFocus];menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
+    if(!showGuide){openGuideFromFullscreen();return;}
+    if(menu){if(catFocus===groups.length){openSettings();return;}setCategory(groups[catFocus]);menu=false;hide('categories');focus=channelIdx(list()[0]);allRows();renderRight();return;}
     if(zone==='channels'){tune(focus);mode(false);return;}
     details();return;
   }
   if(k==='ArrowLeft'){
-    if(!showGuide){mode(true);return;}
+    if(!showGuide){openGuideFromFullscreen();return;}
     if(popup)return;
     if(zone==='programmes'){zone='channels';updateProgrammeFocus();return;}
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
@@ -609,6 +624,10 @@ function boot(){
   fetchJson(base+'tv-fast/channels.json',function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
+    // Restore the last selected category only after the playlist defines groups.
+    var savedCategory='Все';
+    try{savedCategory=localStorage.getItem('aqua-fast-category')||'Все';}catch(ignore){}
+    chosenGroup=contains(groups,savedCategory)?savedCategory:'Все';
     focus=active;cachedList=null;logoOsd(data[active]);syncCategoryHeader();
     $('loading').className='hidden';rect();tune(active);
     // Download EPG only after playback starts, and keep refreshing it later.
