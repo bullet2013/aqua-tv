@@ -3,7 +3,7 @@
 var base='https://bullet2013.github.io/aqua-tv/';
 var channels=[],guide={},groups=[],active=0,focus=0,zone='channels',chosenGroup='Все',menu=false,showGuide=false,popup=false,shows=[],showFocus=0,osdTimer=null,descriptionToken=0,videoSize='',rightProgrammeSignature='';
 var pageStart=0,pageSize=0,pageGroup='',cachedGroup='',cachedList=null;
-var fullscreenDetails=false;
+var fullscreenDetails=false,exitConfirm=false;
 var epgRequestBusy=false,lastEpgAttempt=0,lastEpgSuccess=0,epgGeneratedAt=0;
 var $=function(id){return document.getElementById(id);};
 var el=$;
@@ -471,6 +471,28 @@ function zapWithinCategory(step){
   var nextIndex=channelIdx(available[nextPosition]);
   if(nextIndex>=0)tune(nextIndex);
 }
+function ensureExitDialog(){
+  var dialog=$('exitConfirm');
+  if(dialog)return dialog;
+  dialog=make('div','exit-confirm hidden');
+  dialog.id='exitConfirm';
+  dialog.setAttribute('role','dialog');
+  dialog.setAttribute('aria-label','Подтверждение выхода');
+  var question=add(dialog,'div','exit-confirm-title','Выйти?');
+  var answer=add(dialog,'div','exit-confirm-actions','Да — OK    Нет — Назад');
+  document.body.appendChild(dialog);
+  return dialog;
+}
+function showExitConfirm(){
+  if(exitConfirm)return;
+  exitConfirm=true;
+  ensureExitDialog().className='exit-confirm';
+}
+function closeExitConfirm(){
+  exitConfirm=false;
+  var dialog=$('exitConfirm');
+  if(dialog)dialog.className='exit-confirm hidden';
+}
 function back(){
   if(settings){settings=false;hide('fontSettings');return;}
   if(popup){closeDetails();return;}
@@ -479,10 +501,15 @@ function back(){
   if(showGuide){mode(false);return;}
   // Two separate Back presses can dismiss description, then the infobar.
   if($('osd').className==='show'){hideOsd();return;}
-  // Only a clean fullscreen video (no popup or OSD) exits the widget.
-  send({type:'exit'});
+  // A clean fullscreen video requests confirmation instead of exiting.
+  showExitConfirm();
 }
 function key(k){
+  if(exitConfirm){
+    if(k==='Enter'){closeExitConfirm();send({type:'exit'});}
+    else if(k==='Escape'||k==='Backspace'||k==='Back')closeExitConfirm();
+    return;
+  }
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
   if(settings){
     if(k==='ArrowUp'||k==='ArrowDown'){
@@ -510,7 +537,7 @@ function key(k){
     details();return;
   }
   if(k==='ArrowLeft'){
-    if(!showGuide)return;
+    if(!showGuide){mode(true);return;}
     if(popup)return;
     if(zone==='programmes'){zone='channels';updateProgrammeFocus();return;}
     menu=true;catFocus=Math.max(0,groups.indexOf(chosenGroup));categoryMenu();visible('categories');return;
