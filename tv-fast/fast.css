@@ -401,3 +401,34 @@ body.fullscreen-details #osd{
   display:block!important;
   visibility:visible!important;
 }
+
+/* v41: unobtrusive confirmation over fullscreen playback only. */
+.exit-confirm{
+  position:fixed!important;
+  left:50%!important;
+  top:50%!important;
+  transform:translate(-50%,-50%)!important;
+  z-index:100!important;
+  box-sizing:border-box!important;
+  width:430px!important;
+  max-width:85vw!important;
+  padding:27px 24px!important;
+  border:2px solid #E0FFFF!important;
+  background:#0C4A83!important;
+  color:#fff!important;
+  text-align:center!important;
+  font-family:Arial,sans-serif!important;
+  font-size:var(--tv-font,18px)!important;
+  box-shadow:0 8px 40px rgba(0,0,0,.45)!important;
+}
+.exit-confirm.hidden{display:none!important}
+.exit-confirm-title{
+  font-size:var(--tv-font,18px)!important;
+  font-weight:bold!important;
+  margin:0 0 18px!important;
+}
+.exit-confirm-actions{
+  font-size:var(--tv-font,18px)!important;
+  color:#E0FFFF!important;
+  line-height:1.5!important;
+}
