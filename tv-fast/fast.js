@@ -621,7 +621,7 @@ function refreshGuide(force){
   });
 }
 function boot(){
-  fetchJson(base+'tv-fast/channels.json',function(data){
+  fetchJson(base+'tv-fast/channels.json?v='+Date.now(),function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
     // Restore the last selected category only after the playlist defines groups.
