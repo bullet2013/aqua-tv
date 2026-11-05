@@ -1,0 +1,42 @@
+name: AQUA TV — проверить старые браузеры
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'styles.css'
+      - 'index.html'
+      - 'loader.js'
+      - 'babel.config.json'
+      - 'tools/build-legacy-ui.mjs'
+      - '.github/workflows/legacy-ui-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  legacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Собрать совместимый JavaScript
+        run: |
+          npm install --no-save --no-audit --no-fund @babel/core@7 @babel/cli@7 @babel/preset-env@7 core-js-bundle@3 regenerator-runtime@0.14 pako@2
+          node tools/build-legacy-ui.mjs
+          node --check app.js
+          node --check loader.js
+          node --check dist/legacy/app.js
+          test -s dist/legacy/polyfills.js
+          test -s dist/legacy/pako.min.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AQUA-TV-Legacy-UI-test
+          path: |
+            index.html
+            styles.css
+            config.js
+            app.js
+            loader.js
+            dist/legacy/
