@@ -5,6 +5,25 @@ var player=window.webapis&&window.webapis.avplay;
 var lastRect=[0,0,1920,1080],generation=0,hasRect=false;
 var activeUrl='',openedAt=0,bufferingAt=0,lastMediaTime=null,lastProgressAt=0;
 var observedProgress=false,retries=0,reconnectTimer=null;
+var debugEvents=[],lastSnapshotAt=0,recoveryPending=false,lastVideoResolution='';
+function safeError(value){
+  return String(value).replace(/https?:\/\/[^\s"'<>]+/gi,'[адрес скрыт]').slice(0,220);
+}
+function diagnostic(event,message){
+  var line='[AQUA TV][AVPlay] '+new Date().toISOString()+' '+event+(message?' | '+message:'');
+  debugEvents.push(line);
+  if(debugEvents.length>150)debugEvents.shift();
+  try{if(window.console&&console.log)console.log(line);}catch(ignore){}
+}
+function snapshot(){
+  var state='UNKNOWN',time='недоступно';
+  try{if(player)state=String(player.getState());}catch(ignore){}
+  try{if(player)time=String(player.getCurrentTime());}catch(ignore){}
+  return 'состояние='+state+', время='+time+', буферизация='+(bufferingAt?Math.round((Date.now()-bufferingAt)/1000)+'с':'нет')+
+    ', ход времени='+(observedProgress?'обнаружен':'не подтверждён')+
+    ', последняя активность='+(lastProgressAt?Math.round((Date.now()-lastProgressAt)/1000)+'с назад':'неизвестно')+
+    ', попытки='+retries;
+}
 // Live streams sometimes expose no advancing playback clock. In that case
 // recover only on explicit errors, sustained buffering, or failed preparation.
 var WATCHDOG_INTERVAL=4000,STALL_AFTER=22000,BUFFER_AFTER=25000,PREPARE_AFTER=40000;
@@ -13,10 +32,13 @@ function observeTime(value){
  var time=Number(value),now=Date.now();
  if(!isFinite(time)||time<0)return;
  if(lastMediaTime!==null && (time>lastMediaTime+150 || time<lastMediaTime-2000)){
+   if(!observedProgress)diagnostic('PROGRESS_OK','Таймер потока начал двигаться');
    observedProgress=true;
    lastProgressAt=now;
    // A brief network pause recovered by itself: don't restart a healthy stream.
+   if(reconnectTimer!==null)diagnostic('RETRY_CANCELLED','Поток продолжился до переподключения');
    clearReconnect();
+   if(recoveryPending){diagnostic('RECOVERED','Поток снова воспроизводится; '+snapshot());recoveryPending=false;}
  }
  lastMediaTime=time;
 }
@@ -25,10 +47,16 @@ function scheduleReconnect(reason){
  var url=activeUrl,token=generation;
  retries=Math.min(8,retries+1);
  var delay=Math.min(60000,2000*Math.pow(2,retries-1));
+ recoveryPending=true;
+ diagnostic('STALL_DETECTED',reason+'; '+snapshot());
+ diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+Math.round(delay/1000)+'с');
  status('reconnecting',reason);
  reconnectTimer=setTimeout(function(){
    reconnectTimer=null;
-   if(token===generation&&activeUrl===url)play(url,true);
+   if(token===generation&&activeUrl===url){
+     diagnostic('RETRY_START','Повторное подключение того же канала, попытка '+retries);
+     play(url,true);
+   }
  },delay);
 }
 function watchPlayback(){
@@ -36,6 +64,10 @@ function watchPlayback(){
  if(typeof document.hidden==='boolean'&&document.hidden)return;
  var now=Date.now(),state='';
  try{state=player.getState();}catch(ignore){return;}
+ if(now-lastSnapshotAt>60000){
+   lastSnapshotAt=now;
+   diagnostic('WATCHDOG',snapshot());
+ }
  if(state==='PLAYING'){
    try{observeTime(player.getCurrentTime());}catch(ignore){}
  }
@@ -55,7 +87,7 @@ function watchPlayback(){
 var watchdog=setInterval(watchPlayback,WATCHDOG_INTERVAL);
 var host='31.41.12.104';
 function status(type,message,w,h){if(window.AquaFast&&window.AquaFast.onStatus)window.AquaFast.onStatus(type,message||'',w||0,h||0);}
-function resolution(){try{var tracks=player.getCurrentStreamInfo();for(var i=0;i<tracks.length;i++){if(String(tracks[i].type).toUpperCase().indexOf('VIDEO')<0)continue;var p=JSON.parse(tracks[i].extra_info),w=Number(p.Width||p.width||0),h=Number(p.Height||p.height||0);if(w>0&&h>0){status('resolution','',w,h);return;}}}catch(e){}}
+function resolution(){try{var tracks=player.getCurrentStreamInfo();for(var i=0;i<tracks.length;i++){if(String(tracks[i].type).toUpperCase().indexOf('VIDEO')<0)continue;var p=JSON.parse(tracks[i].extra_info),w=Number(p.Width||p.width||0),h=Number(p.Height||p.height||0);if(w>0&&h>0){var size=w+'x'+h;if(lastVideoResolution!==size){lastVideoResolution=size;diagnostic('VIDEO_RESOLUTION',size);}status('resolution','',w,h);return;}}}catch(e){}}
 function rect(m){
  var width=Number(m.viewportWidth)||document.documentElement.clientWidth||1920;
  var height=Number(m.viewportHeight)||document.documentElement.clientHeight||1080;
@@ -70,11 +102,12 @@ function rect(m){
 }
 function play(url,retrying){
  var a=document.createElement('a');a.href=url;
- if((a.protocol!=='http:'&&a.protocol!=='https:')||a.hostname!==host){status('error','Запрещённый сервер');return;}
- if(!player){status('error','AVPlay отсутствует');return;}
+ if((a.protocol!=='http:'&&a.protocol!=='https:')||a.hostname!==host){diagnostic('ERROR','Адрес канала не разрешён');status('error','Запрещённый сервер');return;}
+ if(!player){diagnostic('ERROR','AVPlay недоступен на телевизоре');status('error','AVPlay отсутствует');return;}
  clearReconnect();
- if(!retrying)retries=0;
- activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;
+ if(!retrying){retries=0;recoveryPending=false;}
+ diagnostic(retrying?'RECONNECT_OPEN':'CHANNEL_OPEN',retrying?'Переподключение, попытка '+retries:'Запуск нового канала');
+ activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;lastSnapshotAt=0;
  lastProgressAt=0;observedProgress=false;
  var token=++generation;
  try{player.stop();}catch(e){}try{player.close();}catch(e){}
@@ -84,21 +117,31 @@ function play(url,retrying){
    player.setListener({
      onbufferingstart:function(){
        if(token!==generation)return;
-       if(!bufferingAt)bufferingAt=Date.now();
+       if(!bufferingAt){
+         bufferingAt=Date.now();
+         diagnostic('BUFFERING_START','Началась буферизация');
+       }
        status('buffering');
      },
      onbufferingcomplete:function(){
        if(token!==generation)return;
-       bufferingAt=0;resolution();status('playing');
+       var seconds=bufferingAt?Math.round((Date.now()-bufferingAt)/1000):0;
+       bufferingAt=0;
+       diagnostic('BUFFERING_END','Буферизация завершилась за '+seconds+'с');
+       if(reconnectTimer!==null){diagnostic('RETRY_CANCELLED','Буферизация восстановилась');clearReconnect();}
+       if(recoveryPending){diagnostic('RECOVERED','Получен сигнал окончания буферизации');recoveryPending=false;}
+       resolution();status('playing');
      },
      oncurrentplaytime:function(time){if(token===generation)observeTime(time);},
-     onstreamplayready:function(){if(token===generation)resolution();},
+     onstreamplayready:function(){if(token===generation){diagnostic('PLAY_READY','Поток готов к воспроизведению');resolution();}},
      onerror:function(e){
        if(token!==generation)return;
+       diagnostic('ERROR','AVPlay: '+safeError(e));
        status('error',String(e));scheduleReconnect('AVPlay error');
      },
      onstreamcompleted:function(){
        if(token!==generation)return;
+       diagnostic('STREAM_ENDED','Трансляция неожиданно завершилась');
        status('error','Трансляция завершена');scheduleReconnect('Stream completed');
      },
      onevent:function(e){if(token===generation&&String(e).indexOf('RESOLUTION_CHANGED')>=0)resolution();}
@@ -107,14 +150,18 @@ function play(url,retrying){
      if(token!==generation)return;
      try{
        player.setDisplayRect(lastRect[0],lastRect[1],lastRect[2],lastRect[3]);
-       player.play();resolution();status('playing');
-     }catch(e){status('error',String(e));scheduleReconnect('Play failed');}
+       player.play();
+       diagnostic('PLAY_CALLED','Команда воспроизведения отправлена');
+       resolution();status('playing');
+     }catch(e){diagnostic('ERROR','Вызов play(): '+safeError(e));status('error',String(e));scheduleReconnect('Play failed');}
    },function(e){
      if(token!==generation)return;
+     diagnostic('ERROR','prepareAsync(): '+safeError(e));
      status('error',String(e));scheduleReconnect('Prepare failed');
    });
  }catch(e){
    if(token!==generation)return;
+   diagnostic('ERROR','open(): '+safeError(e));
    status('error',String(e));scheduleReconnect('Open failed');
  }
 }
@@ -122,12 +169,23 @@ window.AquaBridge={postMessage:function(json){
  var m;try{m=JSON.parse(json);}catch(e){return;}
  if(m.type==='play')play(m.url);
  else if(m.type==='rect')rect(m);
- else if(m.type==='exit'){try{tizen.application.getCurrentApplication().exit();}catch(e){window.close();}}
-}};
+ else if(m.type==='exit'){
+   diagnostic('APP_EXIT','Выход из приложения');
+   try{tizen.application.getCurrentApplication().exit();}catch(e){window.close();}
+ }
+},
+getDebugLog:function(){return debugEvents.join('\n');},
+getDebugState:function(){return snapshot();}
+};
 document.addEventListener('keydown',function(e){
  if(e.keyCode!==10009&&e.keyCode!==27)return;
  e.preventDefault();e.stopPropagation();
  if(window.AquaFast)window.AquaFast.key('Escape');
 },true);
-window.addEventListener('beforeunload',function(){activeUrl='';generation++;clearReconnect();clearInterval(watchdog);try{player.close();}catch(e){}});
+diagnostic('MONITOR_READY','Диагностика AVPlay включена; журнал: AquaBridge.getDebugLog()');
+window.addEventListener('beforeunload',function(){
+ diagnostic('APP_CLOSE','Закрытие оболочки');
+ activeUrl='';generation++;clearReconnect();clearInterval(watchdog);
+ try{player.close();}catch(e){}
+});
 })();
