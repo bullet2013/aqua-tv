@@ -2,7 +2,7 @@
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
         id="https://bullet2013.github.io/aqua-tv/tizen"
-        version="0.1.3"
+        version="0.1.4"
         viewmodes="fullscreen">
   <name>AQUA TV</name>
   <description>IPTV player with native Samsung AVPlay and the AQUA TV website UI</description>
