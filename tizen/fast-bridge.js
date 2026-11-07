@@ -5,7 +5,7 @@ var player=window.webapis&&window.webapis.avplay;
 var lastRect=[0,0,1920,1080],generation=0,hasRect=false;
 var activeUrl='',openedAt=0,bufferingAt=0,lastMediaTime=null,lastProgressAt=0;
 var observedProgress=false,retries=0,reconnectTimer=null;
-var debugEvents=[],lastSnapshotAt=0,recoveryPending=false,lastVideoResolution='';
+var debugEvents=[],lastSnapshotAt=0,recoveryPending=false,recoveryProgressCount=0,lastVideoResolution='';
 function safeError(value){
   return String(value).replace(/https?:\/\/[^\s"'<>]+/gi,'[адрес скрыт]').slice(0,220);
 }
@@ -32,13 +32,25 @@ function observeTime(value){
  var time=Number(value),now=Date.now();
  if(!isFinite(time)||time<0)return;
  if(lastMediaTime!==null && (time>lastMediaTime+150 || time<lastMediaTime-2000)){
+   var advanced=time>lastMediaTime+150;
    if(!observedProgress)diagnostic('PROGRESS_OK','Таймер потока начал двигаться');
    observedProgress=true;
    lastProgressAt=now;
-   // A brief network pause recovered by itself: don't restart a healthy stream.
-   if(reconnectTimer!==null)diagnostic('RETRY_CANCELLED','Поток продолжился до переподключения');
-   clearReconnect();
-   if(recoveryPending){diagnostic('RECOVERED','Поток снова воспроизводится; '+snapshot());recoveryPending=false;}
+   if(recoveryPending){
+     // One discontinuity or residual clock tick is not proof of recovery.
+     // Confirm two actual forward movements before cancelling a retry.
+     recoveryProgressCount=advanced?recoveryProgressCount+1:0;
+     if(recoveryProgressCount>=2){
+       if(reconnectTimer!==null)diagnostic('RETRY_CANCELLED','Повторное подключение не понадобилось: подтверждено движение потока');
+       clearReconnect();
+       recoveryPending=false;recoveryProgressCount=0;
+       diagnostic('RECOVERED','Два последовательных продвижения таймера; '+snapshot());
+     }else if(recoveryProgressCount===1){
+       diagnostic('RECOVERY_VERIFY','Первое продвижение таймера; ожидается подтверждение');
+     }
+   }else{
+     clearReconnect();
+   }
  }
  lastMediaTime=time;
 }
@@ -47,7 +59,7 @@ function scheduleReconnect(reason){
  var url=activeUrl,token=generation;
  retries=Math.min(8,retries+1);
  var delay=Math.min(60000,2000*Math.pow(2,retries-1));
- recoveryPending=true;
+ recoveryPending=true;recoveryProgressCount=0;
  diagnostic('STALL_DETECTED',reason+'; '+snapshot());
  diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+Math.round(delay/1000)+'с');
  status('reconnecting',reason);
@@ -108,7 +120,7 @@ function play(url,retrying){
  if(!retrying){retries=0;recoveryPending=false;}
  diagnostic(retrying?'RECONNECT_OPEN':'CHANNEL_OPEN',retrying?'Переподключение, попытка '+retries:'Запуск нового канала');
  activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;lastSnapshotAt=0;
- lastProgressAt=0;observedProgress=false;
+ lastProgressAt=0;observedProgress=false;recoveryProgressCount=0;
  var token=++generation;
  try{player.stop();}catch(e){}try{player.close();}catch(e){}
  try{
@@ -128,8 +140,9 @@ function play(url,retrying){
        var seconds=bufferingAt?Math.round((Date.now()-bufferingAt)/1000):0;
        bufferingAt=0;
        diagnostic('BUFFERING_END','Буферизация завершилась за '+seconds+'с');
-       if(reconnectTimer!==null){diagnostic('RETRY_CANCELLED','Буферизация восстановилась');clearReconnect();}
-       if(recoveryPending){diagnostic('RECOVERED','Получен сигнал окончания буферизации');recoveryPending=false;}
+       // An ERROR can be followed by BUFFERING_END even when video is frozen.
+       // Keep the scheduled retry until actual forward clock progress.
+       if(recoveryPending)diagnostic('RECOVERY_WAIT','Буферизация закончилась, но движение потока ещё не подтверждено');
        resolution();status('playing');
      },
      oncurrentplaytime:function(time){if(token===generation)observeTime(time);},
