@@ -4,7 +4,7 @@
 var player=window.webapis&&window.webapis.avplay;
 var lastRect=[0,0,1920,1080],generation=0,hasRect=false;
 var activeUrl='',openedAt=0,bufferingAt=0,lastMediaTime=null,lastProgressAt=0;
-var observedProgress=false,retries=0,reconnectTimer=null;
+var observedProgress=false,retries=0,reconnectTimer=null,stableSince=0;
 var debugEvents=[],lastSnapshotAt=0,recoveryPending=false,recoveryProgressCount=0,lastVideoResolution='';
 var recoveryEnabled=true,recoverySeconds=6,bufferTimer=null,bufferEpisode=0;
 // Current widget session receives preferences from the remote-loaded UI.
@@ -56,6 +56,16 @@ function snapshot(){
 // Live streams sometimes expose no advancing playback clock. In that case
 // recover only on explicit errors, sustained buffering, or failed preparation.
 var WATCHDOG_INTERVAL=1000,PREPARE_AFTER=40000;
+// First restart is nearly immediate. Subsequent failed starts slow down.
+// After ten unsuccessful attempts, protect the provider with 2/5/10-minute
+// cooldowns. The per-channel counter resets only after 60s of stable playback.
+function retryDelay(attempt){
+ if(attempt<=1)return 200;
+ if(attempt<=10)return Math.min(60000,2000*Math.pow(2,attempt-2));
+ if(attempt===11)return 120000;
+ if(attempt===12)return 300000;
+ return 600000;
+}
 function clearReconnect(){if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
 function observeTime(value){
  var time=Number(value),now=Date.now();
@@ -65,6 +75,7 @@ function observeTime(value){
    if(!observedProgress)diagnostic('PROGRESS_OK','Таймер потока начал двигаться');
    observedProgress=true;
    lastProgressAt=now;
+   if(!bufferingAt&&!recoveryPending&&!stableSince)stableSince=now;
    // A feed becomes eligible for fast buffering recovery after first progress.
    if(bufferingAt&&bufferTimer===null)armBufferTimer();
    if(recoveryPending){
@@ -89,11 +100,12 @@ function scheduleReconnect(reason){
  if(!recoveryEnabled||!activeUrl||reconnectTimer!==null)return;
  clearBufferTimer();
  var url=activeUrl,token=generation;
- retries=Math.min(8,retries+1);
- var delay=Math.min(60000,2000*Math.pow(2,retries-1));
- recoveryPending=true;recoveryProgressCount=0;
+ retries=Math.min(100000,retries+1);
+ var delay=retryDelay(retries);
+ recoveryPending=true;recoveryProgressCount=0;stableSince=0;
  diagnostic('STALL_DETECTED',reason+'; '+snapshot());
- diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+Math.round(delay/1000)+'с');
+ if(retries===11)diagnostic('RETRY_BACKOFF','10 попыток не дали устойчивого воспроизведения; включены длинные паузы для защиты сервера');
+ diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+(delay/1000)+'с');
  status('reconnecting',reason);
  reconnectTimer=setTimeout(function(){
    reconnectTimer=null;
@@ -127,9 +139,13 @@ function watchPlayback(){
  if(state==='PLAYING'&&bufferingAt&&!observedProgress&&now-openedAt>PREPARE_AFTER){
    scheduleReconnect('Initial buffering exceeded 40 seconds');return;
  }
- if(state==='PLAYING'&&!bufferingAt&&observedProgress&&now-lastProgressAt<8000&&now-openedAt>60000){
-   retries=0;
- }
+ if(state==='PLAYING'&&!bufferingAt&&observedProgress&&lastProgressAt&&now-lastProgressAt<2000){
+   if(!stableSince)stableSince=now;
+   if(retries>0&&now-stableSince>=60000){
+     diagnostic('RETRY_RESET','60 секунд непрерывного воспроизведения; сброс счётчика '+retries+' попыток');
+     retries=0;
+   }
+ }else stableSince=0;
 }
 var watchdog=setInterval(watchPlayback,WATCHDOG_INTERVAL);
 var host='31.41.12.104';
@@ -154,7 +170,7 @@ function play(url,retrying){
  clearReconnect();clearBufferTimer();bufferEpisode++;
  if(!retrying){retries=0;recoveryPending=false;}
  diagnostic(retrying?'RECONNECT_OPEN':'CHANNEL_OPEN',retrying?'Переподключение, попытка '+retries:'Запуск нового канала');
- activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;lastSnapshotAt=0;
+ activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;lastSnapshotAt=0;stableSince=0;
  lastProgressAt=0;observedProgress=false;recoveryProgressCount=0;
  var token=++generation;
  try{player.stop();}catch(e){}try{player.close();}catch(e){}
@@ -165,7 +181,7 @@ function play(url,retrying){
      onbufferingstart:function(){
        if(token!==generation)return;
        if(!bufferingAt){
-         bufferingAt=Date.now();
+         bufferingAt=Date.now();stableSince=0;
          bufferEpisode++;
          diagnostic('BUFFERING_START','Началась буферизация');
          armBufferTimer();
@@ -186,11 +202,13 @@ function play(url,retrying){
      onstreamplayready:function(){if(token===generation){diagnostic('PLAY_READY','Поток готов к воспроизведению');resolution();}},
      onerror:function(e){
        if(token!==generation)return;
+       stableSince=0;
        diagnostic('ERROR','AVPlay: '+safeError(e));
        status('error',String(e));scheduleReconnect('AVPlay error');
      },
      onstreamcompleted:function(){
        if(token!==generation)return;
+       stableSince=0;
        diagnostic('STREAM_ENDED','Трансляция неожиданно завершилась');
        status('error','Трансляция завершена');scheduleReconnect('Stream completed');
      },
