@@ -19,6 +19,12 @@ function speedIndex(){var idx=0,diff=Infinity;for(var i=0;i<speedOptions.length;
 marqueeSpeed=speedOptions[speedIndex()];
 var settingsSection=0,marqueePauseUntil=0,showNextInList=true;
 try{showNextInList=localStorage.getItem('aqua-fast-show-next')!=='no';}catch(ignore){}
+var recoveryEnabled=true,recoverySeconds=6;
+try{
+  recoveryEnabled=localStorage.getItem('aqua-fast-recovery-enabled')!=='no';
+  var savedRecoverySeconds=Number(localStorage.getItem('aqua-fast-recovery-seconds'));
+  if(savedRecoverySeconds>=1&&savedRecoverySeconds<=10&&Math.floor(savedRecoverySeconds)===savedRecoverySeconds)recoverySeconds=savedRecoverySeconds;
+}catch(ignore){}
 var fontPx=18,settings=false,fontOptions=[14,16,18,20,22,24,26,28,30,32,34,36,38,40],fontSelected=2;
 try {fontPx=Number(localStorage.getItem('aqua-fast-font'))||18;}catch(ignore){}
 function resizeOsd(){
@@ -53,6 +59,20 @@ function ensureSettingsUI(){
     var nextValue=add(nextRow,'strong','','Да');nextValue.id='showNextValue';
   }
   if(speedRow.nextSibling!==nextRow)panel.insertBefore(nextRow,speedRow.nextSibling);
+  var autoRow=$('recoveryEnabledRow');
+  if(!autoRow){
+    autoRow=make('div','recovery-row');autoRow.id='recoveryEnabledRow';
+    autoRow.appendChild(document.createTextNode('Автоматически восстанавливать зависший канал: '));
+    var autoValue=add(autoRow,'strong','','Да');autoValue.id='recoveryEnabledValue';
+  }
+  if(nextRow.nextSibling!==autoRow)panel.insertBefore(autoRow,nextRow.nextSibling);
+  var timeoutRow=$('recoveryTimeoutRow');
+  if(!timeoutRow){
+    timeoutRow=make('div','recovery-row');timeoutRow.id='recoveryTimeoutRow';
+    timeoutRow.appendChild(document.createTextNode('Перезапуск, если канал не отвечает: '));
+    var timeoutValue=add(timeoutRow,'strong','','6 сек.');timeoutValue.id='recoveryTimeoutValue';
+  }
+  if(autoRow.nextSibling!==timeoutRow)panel.insertBefore(timeoutRow,autoRow.nextSibling);
   var hint=panel.querySelector('small');if(hint)hint.textContent='↑ / ↓ — параметр · ← / → — изменение · OK — применить · Назад — закрыть';
 }
 function openSettings(){
@@ -60,9 +80,22 @@ function openSettings(){
   fontSelected=Math.max(0,fontOptions.indexOf(fontPx));
   // Must become visible BEFORE measuring font option sizes on Samsung WebKit.
   visible('fontSettings');
-  renderSettings();updateSpeedLabel();updateShowNextLabel();updateSettingsFocus();
+  renderSettings();updateSpeedLabel();updateShowNextLabel();updateRecoveryLabels();updateSettingsFocus();
 }
-function updateSettingsFocus(){var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');var next=$('showNextRow');if(next)next.className='show-next-row'+(settingsSection===2?' active':'');}
+function updateSettingsFocus(){
+ var row=$('scrollSpeedRow');if(row)row.className='speed-row'+(settingsSection===1?' active':'');
+ var title=$('fontSettingRow');if(title)title.className='font-setting-row'+(settingsSection===0?' active':'');
+ var next=$('showNextRow');if(next)next.className='show-next-row'+(settingsSection===2?' active':'');
+ var auto=$('recoveryEnabledRow');if(auto)auto.className='recovery-row'+(settingsSection===3?' active':'');
+ var timeout=$('recoveryTimeoutRow');if(timeout)timeout.className='recovery-row'+(settingsSection===4?' active':'');
+ // On 720p Samsung screens the popup can scroll; keep remote focus visible.
+ var current=[title,row,next,auto,timeout][settingsSection],panel=$('fontSettings');
+ if(current&&panel){
+   var top=current.offsetTop,bottom=top+current.offsetHeight;
+   if(bottom>panel.scrollTop+panel.clientHeight)panel.scrollTop=Math.max(0,bottom-panel.clientHeight+12);
+   else if(top<panel.scrollTop)panel.scrollTop=Math.max(0,top-12);
+ }
+}
 function centerSelectedFont(){
   var p=$('fontChoices'),item=p.querySelector('.font-choice.selected');
   if(!item||!p.clientWidth)return;
@@ -101,6 +134,22 @@ function setShowNext(value){
   updateShowNextLabel();
   stopMarquee();
   if(showGuide)updateRows();
+}
+function updateRecoveryLabels(){
+ var enabled=$('recoveryEnabledValue'),timeout=$('recoveryTimeoutValue');
+ if(enabled)enabled.textContent=recoveryEnabled?'Да':'Нет';
+ if(timeout)timeout.textContent=recoverySeconds+' сек.'+(recoveryEnabled?'':' (выкл.)');
+}
+function syncRecoverySettings(){send({type:'recoverySettings',enabled:recoveryEnabled,seconds:recoverySeconds});}
+function setRecoveryEnabled(value){
+ recoveryEnabled=!!value;
+ try{localStorage.setItem('aqua-fast-recovery-enabled',recoveryEnabled?'yes':'no');}catch(ignore){}
+ updateRecoveryLabels();syncRecoverySettings();
+}
+function setRecoverySeconds(delta){
+ recoverySeconds=Math.max(1,Math.min(10,recoverySeconds+(delta>0?1:-1)));
+ try{localStorage.setItem('aqua-fast-recovery-seconds',String(recoverySeconds));}catch(ignore){}
+ updateRecoveryLabels();syncRecoverySettings();
 }
 function chooseFont(){fontPx=fontOptions[fontSelected];applyFont();try{localStorage.setItem('aqua-fast-font',String(fontPx));}catch(ignore){}settings=false;hide('fontSettings');}
 
@@ -528,12 +577,14 @@ function key(k){
   if(k==='Escape'||k==='Backspace'||k==='Back'){back();return;}
   if(settings){
     if(k==='ArrowUp'||k==='ArrowDown'){
-      settingsSection=Math.max(0,Math.min(2,settingsSection+(k==='ArrowDown'?1:-1)));
+      settingsSection=Math.max(0,Math.min(4,settingsSection+(k==='ArrowDown'?1:-1)));
       updateSettingsFocus();return;
     }
     if(k==='ArrowLeft'||k==='ArrowRight'){
       if(settingsSection===1)setSpeed(k==='ArrowRight'?1:-1);
       else if(settingsSection===2)setShowNext(k==='ArrowRight');
+      else if(settingsSection===3)setRecoveryEnabled(k==='ArrowRight');
+      else if(settingsSection===4)setRecoverySeconds(k==='ArrowRight'?1:-1);
       else{fontSelected=Math.max(0,Math.min(fontOptions.length-1,fontSelected+(k==='ArrowRight'?1:-1)));renderSettings();}
       return;
     }
@@ -621,6 +672,7 @@ function refreshGuide(force){
   });
 }
 function boot(){
+  syncRecoverySettings();
   fetchJson(base+'tv-fast/channels.json?v='+Date.now(),function(data){
     channels=data;groups=['Все'];for(var i=0;i<data.length;i++)if(!contains(groups,data[i].group))groups.push(data[i].group);
     try{active=Math.min(data.length-1,Math.max(0,Number(localStorage.getItem('aqua-fast-channel')||0)));}catch(e){active=0;}
