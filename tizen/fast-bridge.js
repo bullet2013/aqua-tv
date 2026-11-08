@@ -6,6 +6,35 @@ var lastRect=[0,0,1920,1080],generation=0,hasRect=false;
 var activeUrl='',openedAt=0,bufferingAt=0,lastMediaTime=null,lastProgressAt=0;
 var observedProgress=false,retries=0,reconnectTimer=null;
 var debugEvents=[],lastSnapshotAt=0,recoveryPending=false,recoveryProgressCount=0,lastVideoResolution='';
+var recoveryEnabled=true,recoverySeconds=6,bufferTimer=null,bufferEpisode=0;
+// Current widget session receives preferences from the remote-loaded UI.
+function clearBufferTimer(){if(bufferTimer!==null){clearTimeout(bufferTimer);bufferTimer=null;}}
+function armBufferTimer(){
+ clearBufferTimer();
+ if(!recoveryEnabled||!bufferingAt||!observedProgress)return;
+ var token=generation,episode=bufferEpisode;
+ // A dedicated timer gives the selected 1–10 second threshold true precision.
+ bufferTimer=setTimeout(function(){
+   bufferTimer=null;
+   if(!recoveryEnabled||token!==generation||episode!==bufferEpisode||!bufferingAt||!observedProgress)return;
+   diagnostic('BUFFER_TIMEOUT','Буферизация '+recoverySeconds+'с без восстановления');
+   scheduleReconnect('Buffering longer than '+recoverySeconds+' seconds');
+ },recoverySeconds*1000);
+}
+function setRecoverySettings(enabled,seconds){
+ var n=Number(seconds),prevEnabled=recoveryEnabled,prevSeconds=recoverySeconds;
+ recoveryEnabled=enabled!==false;
+ if(isFinite(n)&&n>=1&&n<=10&&Math.floor(n)===n)recoverySeconds=n;
+ if(!recoveryEnabled){
+   clearBufferTimer();
+   if(reconnectTimer!==null)diagnostic('RETRY_CANCELLED','Автовосстановление выключено');
+   clearReconnect();recoveryPending=false;recoveryProgressCount=0;
+ }else if(bufferingAt){
+   armBufferTimer();
+ }
+ if(prevEnabled!==recoveryEnabled||prevSeconds!==recoverySeconds)
+   diagnostic('RECOVERY_SETTINGS','Автовосстановление '+(recoveryEnabled?'включено, '+recoverySeconds+'с':'выключено'));
+}
 function safeError(value){
   return String(value).replace(/https?:\/\/[^\s"'<>]+/gi,'[адрес скрыт]').slice(0,220);
 }
@@ -26,7 +55,7 @@ function snapshot(){
 }
 // Live streams sometimes expose no advancing playback clock. In that case
 // recover only on explicit errors, sustained buffering, or failed preparation.
-var WATCHDOG_INTERVAL=4000,STALL_AFTER=22000,BUFFER_AFTER=25000,PREPARE_AFTER=40000;
+var WATCHDOG_INTERVAL=1000,PREPARE_AFTER=40000;
 function clearReconnect(){if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
 function observeTime(value){
  var time=Number(value),now=Date.now();
@@ -36,6 +65,8 @@ function observeTime(value){
    if(!observedProgress)diagnostic('PROGRESS_OK','Таймер потока начал двигаться');
    observedProgress=true;
    lastProgressAt=now;
+   // A feed becomes eligible for fast buffering recovery after first progress.
+   if(bufferingAt&&bufferTimer===null)armBufferTimer();
    if(recoveryPending){
      // One discontinuity or residual clock tick is not proof of recovery.
      // Confirm two actual forward movements before cancelling a retry.
@@ -55,7 +86,8 @@ function observeTime(value){
  lastMediaTime=time;
 }
 function scheduleReconnect(reason){
- if(!activeUrl||reconnectTimer!==null)return;
+ if(!recoveryEnabled||!activeUrl||reconnectTimer!==null)return;
+ clearBufferTimer();
  var url=activeUrl,token=generation;
  retries=Math.min(8,retries+1);
  var delay=Math.min(60000,2000*Math.pow(2,retries-1));
@@ -72,7 +104,7 @@ function scheduleReconnect(reason){
  },delay);
 }
 function watchPlayback(){
- if(!player||!activeUrl||reconnectTimer!==null)return;
+ if(!recoveryEnabled||!player||!activeUrl||reconnectTimer!==null)return;
  if(typeof document.hidden==='boolean'&&document.hidden)return;
  var now=Date.now(),state='';
  try{state=player.getState();}catch(ignore){return;}
@@ -83,14 +115,17 @@ function watchPlayback(){
  if(state==='PLAYING'){
    try{observeTime(player.getCurrentTime());}catch(ignore){}
  }
- if(bufferingAt&&now-bufferingAt>BUFFER_AFTER){
-   scheduleReconnect('Buffering longer than 25 seconds');return;
- }
- if(state==='PLAYING'&&!bufferingAt&&observedProgress&&lastProgressAt&&now-lastProgressAt>STALL_AFTER){
-   scheduleReconnect('Playback time stopped advancing');return;
+ // Buffering uses a separate precise timer; never double-trigger while buffering.
+ if(state==='PLAYING'&&!bufferingAt&&observedProgress&&lastProgressAt&&now-lastProgressAt>recoverySeconds*1000){
+   scheduleReconnect('Playback time stopped advancing for '+recoverySeconds+' seconds');return;
  }
  if((state==='IDLE'||state==='READY'||state==='NONE'||state==='PAUSED')&&now-openedAt>PREPARE_AFTER){
    scheduleReconnect('AVPlay remained in '+state);return;
+ }
+ // Initial startup is intentionally less aggressive: avoid instant retry before
+ // the first playback sample, but recover from a stuck initial buffer eventually.
+ if(state==='PLAYING'&&bufferingAt&&!observedProgress&&now-openedAt>PREPARE_AFTER){
+   scheduleReconnect('Initial buffering exceeded 40 seconds');return;
  }
  if(state==='PLAYING'&&!bufferingAt&&observedProgress&&now-lastProgressAt<8000&&now-openedAt>60000){
    retries=0;
@@ -116,7 +151,7 @@ function play(url,retrying){
  var a=document.createElement('a');a.href=url;
  if((a.protocol!=='http:'&&a.protocol!=='https:')||a.hostname!==host){diagnostic('ERROR','Адрес канала не разрешён');status('error','Запрещённый сервер');return;}
  if(!player){diagnostic('ERROR','AVPlay недоступен на телевизоре');status('error','AVPlay отсутствует');return;}
- clearReconnect();
+ clearReconnect();clearBufferTimer();bufferEpisode++;
  if(!retrying){retries=0;recoveryPending=false;}
  diagnostic(retrying?'RECONNECT_OPEN':'CHANNEL_OPEN',retrying?'Переподключение, попытка '+retries:'Запуск нового канала');
  activeUrl=url;openedAt=Date.now();bufferingAt=0;lastMediaTime=null;lastSnapshotAt=0;
@@ -131,14 +166,16 @@ function play(url,retrying){
        if(token!==generation)return;
        if(!bufferingAt){
          bufferingAt=Date.now();
+         bufferEpisode++;
          diagnostic('BUFFERING_START','Началась буферизация');
+         armBufferTimer();
        }
        status('buffering');
      },
      onbufferingcomplete:function(){
        if(token!==generation)return;
        var seconds=bufferingAt?Math.round((Date.now()-bufferingAt)/1000):0;
-       bufferingAt=0;
+       bufferingAt=0;bufferEpisode++;clearBufferTimer();
        diagnostic('BUFFERING_END','Буферизация завершилась за '+seconds+'с');
        // An ERROR can be followed by BUFFERING_END even when video is frozen.
        // Keep the scheduled retry until actual forward clock progress.
@@ -182,6 +219,7 @@ window.AquaBridge={postMessage:function(json){
  var m;try{m=JSON.parse(json);}catch(e){return;}
  if(m.type==='play')play(m.url);
  else if(m.type==='rect')rect(m);
+ else if(m.type==='recoverySettings')setRecoverySettings(m.enabled,m.seconds);
  else if(m.type==='exit'){
    diagnostic('APP_EXIT','Выход из приложения');
    try{tizen.application.getCurrentApplication().exit();}catch(e){window.close();}
@@ -198,7 +236,7 @@ document.addEventListener('keydown',function(e){
 diagnostic('MONITOR_READY','Диагностика AVPlay включена; журнал: AquaBridge.getDebugLog()');
 window.addEventListener('beforeunload',function(){
  diagnostic('APP_CLOSE','Закрытие оболочки');
- activeUrl='';generation++;clearReconnect();clearInterval(watchdog);
+ activeUrl='';generation++;clearReconnect();clearBufferTimer();clearInterval(watchdog);
  try{player.close();}catch(e){}
 });
 })();
