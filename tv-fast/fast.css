@@ -432,3 +432,15 @@ body.fullscreen-details #osd{
   color:#E0FFFF!important;
   line-height:1.5!important;
 }
+
+/* FAST v44: AVPlay recovery preferences on preinstalled Tizen shells. */
+#fontSettings .recovery-row{
+  display:block!important;visibility:visible!important;
+  margin:6px 0 8px!important;padding:10px 12px!important;
+  background:#0C4A83!important;color:#fff!important;
+  border:2px solid transparent!important;
+  font-size:var(--tv-font,18px)!important;line-height:1.25!important;
+}
+#fontSettings .recovery-row strong{color:#fff!important;font-size:var(--tv-font,18px)!important}
+#fontSettings .recovery-row.active{background:#17609A!important;border-color:#E0FFFF!important}
+#fontSettings{box-sizing:border-box!important;max-height:94vh!important;overflow-y:auto!important}
