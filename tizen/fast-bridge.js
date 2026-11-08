@@ -56,6 +56,16 @@ function snapshot(){
 // Live streams sometimes expose no advancing playback clock. In that case
 // recover only on explicit errors, sustained buffering, or failed preparation.
 var WATCHDOG_INTERVAL=1000,PREPARE_AFTER=40000;
+// First restart is nearly immediate. Subsequent failed starts slow down.
+// After ten unsuccessful attempts, protect the provider with 2/5/10-minute
+// cooldowns. The per-channel counter resets only after 60s of stable playback.
+function retryDelay(attempt){
+ if(attempt<=1)return 200;
+ if(attempt<=10)return Math.min(60000,2000*Math.pow(2,attempt-2));
+ if(attempt===11)return 120000;
+ if(attempt===12)return 300000;
+ return 600000;
+}
 function clearReconnect(){if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
 function observeTime(value){
  var time=Number(value),now=Date.now();
@@ -89,11 +99,12 @@ function scheduleReconnect(reason){
  if(!recoveryEnabled||!activeUrl||reconnectTimer!==null)return;
  clearBufferTimer();
  var url=activeUrl,token=generation;
- retries=Math.min(8,retries+1);
- var delay=Math.min(60000,2000*Math.pow(2,retries-1));
+ retries=Math.min(100000,retries+1);
+ var delay=retryDelay(retries);
  recoveryPending=true;recoveryProgressCount=0;
  diagnostic('STALL_DETECTED',reason+'; '+snapshot());
- diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+Math.round(delay/1000)+'с');
+ if(retries===11)diagnostic('RETRY_BACKOFF','10 попыток не дали устойчивого воспроизведения; включены длинные паузы для защиты сервера');
+ diagnostic('RETRY_SCHEDULED','Попытка '+retries+', задержка '+(delay/1000)+'с');
  status('reconnecting',reason);
  reconnectTimer=setTimeout(function(){
    reconnectTimer=null;
@@ -127,7 +138,8 @@ function watchPlayback(){
  if(state==='PLAYING'&&bufferingAt&&!observedProgress&&now-openedAt>PREPARE_AFTER){
    scheduleReconnect('Initial buffering exceeded 40 seconds');return;
  }
- if(state==='PLAYING'&&!bufferingAt&&observedProgress&&now-lastProgressAt<8000&&now-openedAt>60000){
+ if(state==='PLAYING'&&!bufferingAt&&observedProgress&&now-lastProgressAt<8000&&now-openedAt>60000&&retries>0){
+   diagnostic('RETRY_RESET','Поток стабильно работает более минуты; сброс счётчика '+retries+' попыток');
    retries=0;
  }
 }
