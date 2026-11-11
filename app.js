@@ -12,6 +12,16 @@ function nativeSend(payload) {
   try { window.AquaAndroid.postMessage(JSON.stringify(payload)); }
   catch (error) { console.warn('AQUA native message failed', error); }
 }
+let lastNativeRectKey = '';
+let nativeRectQueued = false;
+function scheduleNativeVideoRect() {
+  if (!AQUA_NATIVE || nativeRectQueued) return;
+  nativeRectQueued = true;
+  requestAnimationFrame(() => {
+    nativeRectQueued = false;
+    updateNativeVideoRect();
+  });
+}
 function updateNativeVideoRect() {
   if (!AQUA_NATIVE) return;
   const rect = shell.getBoundingClientRect();
@@ -20,9 +30,18 @@ function updateNativeVideoRect() {
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
   const point = n => Math.round(n * 10) / 10;
-  nativeSend({type:'rect', x:point(rect.left), y:point(rect.top), width:point(rect.width),
-    height:point(rect.height), viewportWidth:vw, viewportHeight:vh,
-    visible:rect.width > 0 && rect.height > 0 });
+  const payload = {type:'rect', x:point(rect.left), y:point(rect.top),
+    width:point(rect.width), height:point(rect.height),
+    viewportWidth:vw, viewportHeight:vh, visible:rect.width > 0 && rect.height > 0};
+  const key = JSON.stringify(payload);
+  if (key !== lastNativeRectKey) {
+    lastNativeRectKey = key;
+    nativeSend(payload);
+  }
+  // Samsung AVPlay is composited as a separate TV video plane. On old Tizen
+  // clip-path polygons force very expensive paints and are often unsupported;
+  // TV panel transparency is handled by tv.css instead.
+  if (document.documentElement.classList.contains('aqua-tizen')) return;
   // Punch an actual transparent hole through the website backgrounds, so the
   // hardware-decoded TextureView behind this transparent WebView is visible.
   // The native video remains independent of EPG and other site rendering.
@@ -76,10 +95,10 @@ if (AQUA_NATIVE) {
       updateDiagnostics();
     }
   };
-  window.addEventListener('resize', () => requestAnimationFrame(updateNativeVideoRect));
+  window.addEventListener('resize', () => scheduleNativeVideoRect());
   window.addEventListener('orientationchange', () => setTimeout(updateNativeVideoRect, 150));
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) requestAnimationFrame(updateNativeVideoRect);
+    if (!document.hidden) scheduleNativeVideoRect();
   });
   setInterval(() => { if (state?.activeId) updateNativeVideoRect(); }, 1200);
 }
@@ -189,11 +208,14 @@ function safeUrl(value) {
 }
 function logoMarkup(channel, className = 'row-logo') {
   const logo = safeUrl(channel?.logo);
+  // On old Tizen, loading=lazy may never fetch a logo inside a hidden
+  // fullscreen bar. Always eagerly load the fullscreen channel icon.
+  const loading = className === 'infobar-logo' ? 'eager' : 'lazy';
   const fallback = escapeHtml((channel?.name || 'TV').trim().slice(0, 2).toUpperCase());
   if (!logo) return `<span class="${className}"><span class="row-logo-fallback">${fallback}</span></span>`;
   // The fallback must not be painted behind transparent channel artwork.
   // Display it only if the actual image fails to load.
-  return `<span class="${className}"><img loading="lazy" src="${logo}" alt="" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="row-logo-fallback" hidden>${fallback}</span></span>`;
+  return `<span class="${className}"><img loading="${loading}" src="${logo}" alt="" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="row-logo-fallback" hidden>${fallback}</span></span>`;
 }
 function activeChannel() { return state.channels.find(c => c.id === state.activeId) || null; }
 // The guide follows the channel under the pointer/keyboard cursor, not the
@@ -227,15 +249,23 @@ function setProgressBar(node, program, now = Date.now()) {
   node.dataset.epgStop = program ? String(program.stop) : '';
   node.style.width = progress(program, now) + '%';
 }
+let lastTizenEpgTickAt = 0;
 function tickLiveEPG() {
   if (!state.channels.length || document.hidden) return;
   const now = Date.now();
+  // Updating every progress bar every second forces too many style/layout
+  // updates on legacy TV browsers. Boundaries are still checked frequently.
+  if (document.documentElement.classList.contains('aqua-tizen')
+      && now - lastTizenEpgTickAt < 5000
+      && now < selectedBoundaryAt
+      && (!state.guideOpen || now < listBoundaryAt)) return;
+  lastTizenEpgTickAt = now;
   // EPG titles/times switch automatically at the exact programme boundary.
   if (now >= selectedBoundaryAt || (state.guideOpen && now >= listBoundaryAt)) {
     renderNow();
-    if (state.guideOpen) { renderChannels(); renderSchedule(); updateProgramFocus(); if (state.popupOpen) closeProgramPopup(); }
+    if (state.guideOpen) { if (!document.documentElement.classList.contains('aqua-tizen')) renderChannels(); renderSchedule(); updateProgramFocus(); if (state.popupOpen) closeProgramPopup(); }
   }
-  document.querySelectorAll('.epg-progress').forEach(bar => {
+  (state.guideOpen ? el('guideView') : el('fullscreenInfoBar')).querySelectorAll('.epg-progress').forEach(bar => {
     const { epgStart, epgStop } = bar.dataset;
     if (epgStart && epgStop) {
       bar.style.width = progressBetween(Number(epgStart), Number(epgStop), now) + '%';
@@ -312,7 +342,13 @@ function renderNow() {
     ? 'Загружаем телепрограмму…' : 'Программа пока недоступна');
   // The fullscreen info bar always reflects the PLAYING stream, even when
   // keyboard focus is browsing a different channel in the guide.
-  el('infoBarLogo').innerHTML = playingChannel ? logoMarkup(playingChannel, 'infobar-logo') : '';
+  // Preserve the existing logo DOM when EPG/focus changes to avoid image
+  // reloads and flicker on slow Tizen televisions.
+  const logoKey = playingChannel ? playingChannel.id : '';
+  if (el('infoBarLogo').dataset.channelId !== logoKey) {
+    el('infoBarLogo').dataset.channelId = logoKey;
+    el('infoBarLogo').innerHTML = playingChannel ? logoMarkup(playingChannel, 'infobar-logo') : '';
+  }
   el('infoBarName').textContent = playingChannel?.name || 'AQUA TV';
   el('infoBarNow').textContent = titleOf(playing);
   el('infoBarNext').textContent = nextProgram(playingChannel, now)?.title || 'Следующая передача неизвестна';
@@ -380,6 +416,11 @@ function syncCategoryConnection() {
 // character count. Small viewports reserve room for EPG text.
 function refreshChannelLayout() {
   const parent = el('channelList');
+  if (document.documentElement.classList.contains('aqua-tizen')) {
+    // Native Samsung TV CSS uses a fixed 42/58 flex row; measuring all channel
+    // names with Canvas on every EPG refresh is expensive and unnecessary.
+    return;
+  }
   if (!parent || !state.channels.length || !parent.clientWidth) return;
   const reference = parent.querySelector('.row-name');
   const style = reference ? getComputedStyle(reference) : null;
@@ -399,24 +440,30 @@ function refreshChannelLayout() {
 function refreshMarquee() {
   const parent = el('channelList');
   if (!parent) return;
+  // The old implementation measured scrollWidth for EVERY row on every
+  // remote-control keypress, forcing costly synchronous layouts.
+  const previous = parent.querySelectorAll('.channel-row.epg-marquee, .channel-row.name-marquee');
+  previous.forEach(row => {
+    row.classList.remove('epg-marquee');
+    row.classList.remove('name-marquee');
+  });
+  if (document.documentElement.classList.contains('aqua-legacy-browser')) return;
   const enabled = state.guideOpen && state.navigationZone === 'channels' && !state.menuOpen && !state.settingsOpen;
-  for (const row of parent.querySelectorAll('.channel-row')) {
-    const focused = enabled && row.dataset.channelId === state.focusedId;
-    const hovered = enabled && row.matches(':hover');
-    const animate = focused || hovered;
-    for (const [viewportClass, trackClass, flagClass] of [
-      ['.row-scroll-window', '.row-scroll-track', 'epg-marquee'],
-      ['.row-name', '.row-name-track', 'name-marquee']
-    ]) {
-      const viewport = row.querySelector(viewportClass);
-      const track = row.querySelector(trackClass);
-      if (!viewport || !track) continue;
-      const distance = Math.max(0, Math.ceil(track.scrollWidth - viewport.clientWidth));
-      track.style.setProperty('--marquee-shift', `${-distance}px`);
-      track.style.setProperty('--marquee-duration', `${Math.max(5, Math.min(23, distance / 19 + 5))}s`);
-      row.classList.toggle(flagClass, animate && distance > 3);
-    }
-  }
+  if (!enabled) return;
+  const focus = parent.querySelector('.channel-row.focused');
+  if (!focus) return;
+  [
+    ['.row-scroll-window', '.row-scroll-track', 'epg-marquee'],
+    ['.row-name', '.row-name-track', 'name-marquee']
+  ].forEach(([viewportClass, trackClass, flagClass]) => {
+    const viewport = focus.querySelector(viewportClass);
+    const track = focus.querySelector(trackClass);
+    if (!viewport || !track) return;
+    const distance = Math.max(0, Math.ceil(track.scrollWidth - viewport.clientWidth));
+    track.style.setProperty('--marquee-shift', String(-distance) + 'px');
+    track.style.setProperty('--marquee-duration', Math.max(5, Math.min(23, distance / 19 + 5)) + 's');
+    focus.classList.toggle(flagClass, distance > 3);
+  });
 }
 
 function renderChannels() {
@@ -465,7 +512,7 @@ function renderSchedule() {
   const channel = guideChannel();
   const now = Date.now();
   // The active programme is shown above, so this list contains only what is next.
-  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, 30);
+  const matching = getPrograms(channel).filter(p => p.start > now && p.start < now + 36 * 3600000).slice(0, document.documentElement.classList.contains('aqua-tizen') ? 10 : 30);
   const panel = el('programList');
   if (!matching.length) {
     panel.innerHTML = `<div class="no-guide">${state.epgStatus === 'loading' || state.epgStatus === 'updating' ? 'Получаем программу передач. Она появится здесь автоматически.' : `Нет ближайших передач для tvg-id «${escapeHtml(channel?.tvgId || 'не указан')}». Диагностика EPG доступна по клавише G.`}</div>`;
@@ -501,8 +548,17 @@ function setGuide(open) {
     el('previewSlot').appendChild(shell); // move one video instead of restarting the HLS stream
     el('fullscreenStage').hidden = true;
     state.focusedId = state.activeId;
-    renderAll();
-    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
+    if (AQUA_NATIVE) {
+      // Allow the video surface to resize before rebuilding EPG/channel DOM.
+      scheduleNativeVideoRect();
+      requestAnimationFrame(() => {
+        if (!state.guideOpen) return;
+        renderAll();
+        scheduleNativeVideoRect();
+      });
+    } else {
+      renderAll();
+    }
     requestAnimationFrame(() => {
       const selected = el('channelList').querySelector('.channel-row.focused');
       selected?.scrollIntoView({ block: 'nearest' });
@@ -513,7 +569,7 @@ function setGuide(open) {
     el('fullscreenStage').prepend(shell);
     el('guideView').hidden = true;
     revealInfoBar();
-    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
+    if (AQUA_NATIVE) scheduleNativeVideoRect();
   }
 }
 function syncMuteButton() {
@@ -705,7 +761,7 @@ function playChannel(channel, initial = false) {
     // No browser hls.js, MediaSource, or WebView fetch is used for video.
     el('playerPlaceholder').hidden = true;
     nativeSend({ type:'play', url:src });
-    requestAnimationFrame(updateNativeVideoRect);
+    scheduleNativeVideoRect();
     updateDiagnostics();
     return;
   }
@@ -845,11 +901,25 @@ function playlistItems(m3u, baseUrl) {
 }
 
 async function download(url, externalSignal) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), APP_CONFIG.requestTimeoutMs);
-  if (externalSignal) externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  // AbortController is absent on some Android TV WebViews; a timeout must
+  // still reject the request instead of breaking startup before fetch().
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  if (externalSignal && controller && externalSignal.addEventListener) {
+    externalSignal.addEventListener('abort', () => controller.abort());
+  }
+  let timer;
   try {
-    const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    const options = { cache: 'no-store' };
+    if (controller) options.signal = controller.signal;
+    const response = await Promise.race([
+      fetch(url, options),
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          if (controller) controller.abort();
+          reject(new Error('Тайм-аут загрузки'));
+        }, APP_CONFIG.requestTimeoutMs);
+      })
+    ]);
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
     return response;
   } finally { clearTimeout(timer); }
@@ -887,30 +957,65 @@ function xmlTag(inner, tag) {
 // The incoming body may be plain XML or raw gzip; HTTP Content-Encoding decompression
 // (if present) has already happened in fetch, so only inspect the actual bytes.
 async function streamXMLTV(sourceObject, wantedIds, onProgress = () => {}) {
-  const body = sourceObject.body || sourceObject.stream?.();
-  if (!body) throw new Error('Невозможно прочитать EPG. Нужен современный браузер.');
-  const networkReader = body.getReader();
-  const first = await networkReader.read();
-  if (first.done || !first.value?.length) throw new Error('EPG-файл пуст.');
-  let bytesRead = first.value.byteLength;
-  const totalBytes = Number(sourceObject.headers?.get('Content-Length') || sourceObject.size || 0);
-  const stream = new ReadableStream({
-    start(controller) { controller.enqueue(first.value); },
-    async pull(controller) {
-      const chunk = await networkReader.read();
-      if (chunk.done) { controller.close(); return; }
-      bytesRead += chunk.value.byteLength;
-      onProgress(bytesRead, totalBytes);
-      controller.enqueue(chunk.value);
-    },
-    cancel(reason) { return networkReader.cancel(reason); }
-  });
-  onProgress(bytesRead, totalBytes);
-  const gzip = first.value[0] === 0x1f && first.value[1] === 0x8b;
-  if (gzip && !('DecompressionStream' in window)) throw new Error('Firefox устарел: не поддерживается распаковка gzip. Обновите браузер.');
-  const decodedStream = gzip ? stream.pipeThrough(new DecompressionStream('gzip')) : stream;
-  const reader = decodedStream.getReader();
-  const decoder = new TextDecoder('utf-8');
+  const body = sourceObject.body || (sourceObject.stream && sourceObject.stream());
+  const totalBytes = Number((sourceObject.headers && sourceObject.headers.get('Content-Length')) || sourceObject.size || 0);
+  let reader;
+  let decoder = new TextDecoder('utf-8');
+  if (body && typeof body.getReader === 'function' &&
+      typeof ReadableStream === 'function' &&
+      typeof DecompressionStream === 'function') {
+    const networkReader = body.getReader();
+    const first = await networkReader.read();
+    if (first.done || !first.value || !first.value.length) throw new Error('EPG-файл пуст.');
+    let bytesRead = first.value.byteLength;
+    const stream = new ReadableStream({
+      start(controller) { controller.enqueue(first.value); },
+      async pull(controller) {
+        const chunk = await networkReader.read();
+        if (chunk.done) { controller.close(); return; }
+        bytesRead += chunk.value.byteLength;
+        onProgress(bytesRead, totalBytes);
+        controller.enqueue(chunk.value);
+      },
+      cancel(reason) { return networkReader.cancel(reason); }
+    });
+    onProgress(bytesRead, totalBytes);
+    const gzip = first.value[0] === 0x1f && first.value[1] === 0x8b;
+    reader = (gzip ? stream.pipeThrough(new DecompressionStream('gzip')) : stream).getReader();
+  } else {
+    // Older engines have no Web Streams or DecompressionStream. The fallback
+    // loads the small, server-prepared EPG and processes it in 64 KB slices
+    // while yielding to the UI between slices.
+    let binary;
+    if (typeof sourceObject.arrayBuffer === 'function') {
+      binary = await sourceObject.arrayBuffer();
+    } else {
+      binary = await new Promise((resolve, reject) => {
+        const fileReader = new FileReader();
+        fileReader.onload = () => resolve(fileReader.result);
+        fileReader.onerror = () => reject(fileReader.error);
+        fileReader.readAsArrayBuffer(sourceObject);
+      });
+    }
+    let decoded = new Uint8Array(binary);
+    if (!decoded.length) throw new Error('EPG-файл пуст.');
+    onProgress(decoded.length, totalBytes || decoded.length);
+    if (decoded[0] === 0x1f && decoded[1] === 0x8b) {
+      if (!window.pako || !window.pako.ungzip) throw new Error('Не удалось распаковать XMLTV.');
+      decoded = window.pako.ungzip(decoded);
+    }
+    let offset = 0;
+    reader = {
+      read() {
+        return new Promise(resolve => setTimeout(() => {
+          if (offset >= decoded.length) { resolve({done:true}); return; }
+          const chunk = decoded.subarray(offset, offset + 65536);
+          offset += chunk.length;
+          resolve({done:false, value:chunk});
+        }, 0));
+      }
+    };
+  }
   const now = Date.now();
   const earliestAllowed = now - 12 * 60 * 60 * 1000;
   const latestAllowed = now + APP_CONFIG.epgDaysAhead * 24 * 3600_000;
@@ -1241,12 +1346,27 @@ function syncChannelFocus() {
     row.tabIndex = selected && zoneActive ? 0 : -1;
   });
 }
+let tizenEpgFrame = 0;
+let tizenResetEpgScroll = false;
 function refreshBrowsedEPG(resetScroll = false) {
-  // Only programme DOM changes; do not restart or move the playing video.
-  // A DIFFERENT browsed channel always starts its future schedule at the top.
+  // Keep channel focus immediate; coalesce EPG DOM work into at most one
+  // frame when several remote presses arrive in a burst.
   if (resetScroll) {
     state.focusedProgramIndex = 0;
     closeProgramPopup();
+  }
+  if (document.documentElement.classList.contains('aqua-tizen')) {
+    tizenResetEpgScroll = tizenResetEpgScroll || resetScroll;
+    if (tizenEpgFrame) return;
+    tizenEpgFrame = requestAnimationFrame(() => {
+      tizenEpgFrame = 0;
+      renderNow();
+      renderSchedule();
+      if (tizenResetEpgScroll) el('programList').scrollTop = 0;
+      tizenResetEpgScroll = false;
+      updateProgramFocus();
+    });
+    return;
   }
   renderNow();
   renderSchedule();
@@ -1382,19 +1502,64 @@ function repositionProgramPopup() {
     connector.style.width = `${width}px`;
   }
 }
+let tizenDescCache = Object.create(null);
+function tizenDescriptionKey(id) {
+  let hash=2166136261;
+  for(let i=0;i<id.length;i++) hash=Math.imul(hash ^ id.charCodeAt(i),16777619);
+  return (hash>>>0).toString(16);
+}
+async function loadTizenDescription(programme) {
+  const channel=guideChannel();
+  if (!channel || !channel.tvgId) return;
+  const channelId=channel.tvgId.toLowerCase().trim();
+  const cacheKey=tizenDescriptionKey(channelId);
+  const programKey=String(programme.start)+'|'+String(programme.stop);
+  try {
+    if (!tizenDescCache[cacheKey]) {
+      const base=APP_CONFIG.epgDescriptionsUrl || 'https://bullet2013.github.io/aqua-tv/epg-tv-descriptions/';
+      const reply=await fetch(base+cacheKey+'.json');
+      if(!reply.ok)throw Error('HTTP '+reply.status);
+      const data=await reply.json();
+      if (data.id !== channelId)throw Error('EPG id mismatch');
+      tizenDescCache=Object.create(null);
+      tizenDescCache[cacheKey]=data.programmes || {};
+    }
+    if(state.popupOpen && guideChannel()?.tvgId?.toLowerCase().trim()===channelId &&
+        selectedProgramme()?.start===programme.start) {
+      el('popupDescription').textContent=xmlEntities(tizenDescCache[cacheKey][programKey] || '').trim() || 'Описание передачи отсутствует в телегиде.';
+      fitTizenPopup();
+    }
+  } catch(error) {
+    if(state.popupOpen && selectedProgramme()?.start===programme.start)
+      el('popupDescription').textContent='Описание недоступно.';
+  }
+}
+function fitTizenPopup() {
+  if (!document.documentElement.classList.contains('aqua-tizen')) return;
+  const popup=el('programPopup');
+  const panel=document.querySelector('.channels-panel');
+  if (!panel || popup.hidden) return;
+  popup.style.height='auto';
+  popup.style.maxHeight=Math.max(130,panel.clientHeight-20)+'px';
+  el('popupDescription').style.maxHeight='none';
+  popup.style.overflowY='auto';
+  repositionProgramPopup();
+}
 function openProgramPopup() {
   const programme = selectedProgramme();
   if (!programme) { toast('Для этой передачи нет данных телегида'); return; }
   el('popupTag').textContent = state.focusedProgramIndex === 0 ? 'СЕЙЧАС В ЭФИРЕ' : 'ДАЛЕЕ В ЭФИРЕ';
   el('popupTitle').textContent = programme.title;
   el('popupTime').textContent = `${timeRange(programme)} · ${guideChannel()?.name || 'Телеканал'}`;
-  el('popupDescription').textContent = programme.desc?.trim() || 'Описание передачи отсутствует в телегиде.';
+  el('popupDescription').textContent = programme.desc?.trim() || (document.documentElement.classList.contains('aqua-tizen') ? 'Загружаем описание…' : 'Описание передачи отсутствует в телегиде.');
+  if (document.documentElement.classList.contains('aqua-tizen')) loadTizenDescription(programme);
   state.popupOpen = true;
   el('programPopup').hidden = false;
   document.querySelector('.channels-panel')?.classList.add('popup-visible');
   document.querySelector('.right-panel')?.classList.add('popup-target-active');
   updateProgramFocus();
-  repositionProgramPopup();
+  if (document.documentElement.classList.contains('aqua-tizen')) fitTizenPopup();
+  else repositionProgramPopup();
 }
 function switchNavigationZone(zone) {
   if (zone === 'categories') { openCategoryMenu(); return; }
@@ -1667,6 +1832,10 @@ function wireEvents() {
       if (!el('epgPanel').hidden) { event.preventDefault(); toggleEPGPanel(false); return; }
       if (!diagPanel.hidden) { event.preventDefault(); toggleDiagnostics(false); return; }
       event.preventDefault();
+      if (document.documentElement.classList.contains('aqua-tizen') && state.guideOpen) {
+        nativeSend({type:'exit'});
+        return;
+      }
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       setGuide(!state.guideOpen);
       if (!state.guideOpen && typing) target.blur();
@@ -1700,7 +1869,7 @@ function wireEvents() {
 async function boot() {
   applyFontSize(state.fontPx);
   wireEvents();
-  if (AQUA_NATIVE && window.ResizeObserver) new ResizeObserver(updateNativeVideoRect).observe(shell);
+  if (AQUA_NATIVE && window.ResizeObserver) new ResizeObserver(scheduleNativeVideoRect).observe(shell);
   clockTick();
   syncMuteButton();
   const startupText = el('startupText');

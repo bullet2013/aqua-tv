@@ -936,3 +936,32 @@ html.aqua-native-android .row-right {overflow-x: hidden;}
 .android-exo-settings p {font-size:12px;margin:0 0 12px}
 .android-exo-settings .font-apply-button {width:100%;min-height:44px}
 .android-exo-settings[hidden] {display:none!important}
+
+/* Compatibility fallbacks: recognized by older Android WebView before inset/min()/dvh. */
+.fullscreen-stage,.guide-view,.startup,.font-settings {top:0;right:0;bottom:0;left:0}
+.startup {width:100%;height:100%;min-height:100%;box-sizing:border-box}
+.startup-card {width:420px;max-width:100%;box-sizing:border-box}
+.font-settings-card {width:470px;max-width:100%;max-height:90vh}
+html.aqua-legacy-browser .startup {display:-webkit-flex;display:flex;align-items:center;justify-content:center}
+html.aqua-legacy-browser .startup-card {display:-webkit-flex;display:flex}
+html.aqua-legacy-browser .startup-symbol {display:-webkit-flex;display:flex;align-items:center;justify-content:center}
+html.aqua-legacy-browser .font-settings {display:-webkit-flex;display:flex;align-items:center;justify-content:center}
+html.aqua-legacy-browser *,html.aqua-legacy-browser *::before,html.aqua-legacy-browser *::after {
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  transition-duration:0s!important;
+}
+html.aqua-legacy-browser .row-name-track,html.aqua-legacy-browser .row-scroll-track {
+  animation:none!important;will-change:auto!important
+}
+/* Two-panel TV layout fallback when CSS grid is unavailable; no replacement UI. */
+@supports not (display:grid) {
+  .guide-layout {display:flex;flex-direction:row;height:100%;min-height:0}
+  .channels-panel {width:57%;flex:0 0 57%;min-width:0}
+  .right-panel {width:43%;flex:1 1 43%;min-width:0}
+  .categories-panel {position:absolute}
+  .guide-view {height:100%}
+  .startup-card {margin:auto}
+  .schedule-row {display:flex;align-items:center}
+  .schedule-time {flex:0 0 54px}
+  .schedule-copy {flex:1;min-width:0}
+}
