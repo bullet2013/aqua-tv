@@ -13,9 +13,12 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.JsPromptResult;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
@@ -50,6 +53,8 @@ import java.util.Set;
 public class MainActivity extends Activity {
     private static final String TAG = "AQUA-TV";
     private static final String SITE = "https://bullet2013.github.io/aqua-tv/";
+    private static final String COMPAT_SITE = "https://bullet2013.github.io/aqua-tv/index.html";
+    private static final String BRIDGE_PREFIX = "AQUA-TV-BRIDGE/1:";
     private static final String ORIGIN = "https://bullet2013.github.io";
     private static final Set<String> ALLOWED_STREAM_HOSTS = Collections.singleton("31.41.12.104");
 
@@ -108,6 +113,7 @@ public class MainActivity extends Activity {
         configurePlayer();
 
         webView = new WebView(this);
+        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + " AQUA-TV-LEGACY-BRIDGE/1");
         webView.setBackgroundColor(Color.TRANSPARENT);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings settings = webView.getSettings();
@@ -119,6 +125,24 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onJsPrompt(WebView view, String url, String message,
+                    String defaultValue, JsPromptResult result) {
+                Uri origin = Uri.parse(url == null ? "" : url);
+                if (message != null && message.startsWith(BRIDGE_PREFIX)
+                        && "https".equalsIgnoreCase(origin.getScheme())
+                        && "bullet2013.github.io".equalsIgnoreCase(origin.getHost())
+                        && origin.getPath() != null && origin.getPath().startsWith("/aqua-tv/")
+                        && message.length() < 8192) {
+                    handleSiteMessage(message.substring(BRIDGE_PREFIX.length()));
+                    result.confirm("");
+                    return true;
+                }
+                // Do not allow untrusted JavaScript dialogs to drive native playback.
+                result.cancel();
+                return true;
+            }
+        });
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
@@ -127,6 +151,24 @@ public class MainActivity extends Activity {
                 if (url != null && url.startsWith(SITE)) {
                     view.evaluateJavascript(EXO_SETTINGS_ENTRY_SCRIPT, null);
                 }
+            }
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if ("https".equalsIgnoreCase(uri.getScheme())
+                        && "bullet2013.github.io".equalsIgnoreCase(uri.getHost())) {
+                    String path = uri.getPath();
+                    String asset = null;
+                    String mime = null;
+                    if ("/aqua-tv/app.js".equals(path)) { asset = "compat/app.js"; mime = "application/javascript"; }
+                    else if ("/aqua-tv/config.js".equals(path)) { asset = "compat/config.js"; mime = "application/javascript"; }
+                    else if ("/aqua-tv/styles.css".equals(path)) { asset = "compat/styles.css"; mime = "text/css"; }
+                    if (asset != null) {
+                        try {
+                            return new WebResourceResponse(mime, "UTF-8", getAssets().open(asset));
+                        } catch (java.io.IOException ex) { Log.e(TAG, "Missing UI asset " + asset, ex); }
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -154,10 +196,22 @@ public class MainActivity extends Activity {
                         if (json != null && json.length() < 8192) handleSiteMessage(json);
                     }
                 });
-        } else {
-            Toast.makeText(this, "Обновите Android System WebView", Toast.LENGTH_LONG).show();
         }
-        webView.loadUrl(SITE);
+        // Use APK-bundled transpiled JS / legacy CSS with a trusted HTTPS base URL.
+        // Remote playlist, logos and EPG still resolve against GitHub Pages.
+        try {
+            java.io.InputStream in = getAssets().open("compat/index.html");
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] bytes = new byte[8192];
+            int count;
+            while ((count = in.read(bytes)) != -1) out.write(bytes, 0, count);
+            in.close();
+            webView.loadDataWithBaseURL(SITE, out.toString("UTF-8"),
+                    "text/html", "UTF-8", null);
+        } catch (Exception e) {
+            Log.e(TAG, "Bundled UI failed", e);
+            webView.loadUrl(SITE);
+        }
     }
 
     private void configurePlayer() {
