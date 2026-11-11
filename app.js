@@ -12,6 +12,15 @@ function nativeSend(payload) {
   try { window.AquaAndroid.postMessage(JSON.stringify(payload)); }
   catch (error) { console.warn('AQUA native message failed', error); }
 }
+let lastNativeRect = '';
+let pendingNativeRectFrame = 0;
+function scheduleNativeVideoRect() {
+  if (!AQUA_NATIVE || pendingNativeRectFrame) return;
+  pendingNativeRectFrame = requestAnimationFrame(() => {
+    pendingNativeRectFrame = 0;
+    updateNativeVideoRect();
+  });
+}
 function updateNativeVideoRect() {
   if (!AQUA_NATIVE) return;
   const rect = shell.getBoundingClientRect();
@@ -20,9 +29,14 @@ function updateNativeVideoRect() {
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
   const point = n => Math.round(n * 10) / 10;
-  nativeSend({type:'rect', x:point(rect.left), y:point(rect.top), width:point(rect.width),
-    height:point(rect.height), viewportWidth:vw, viewportHeight:vh,
-    visible:rect.width > 0 && rect.height > 0 });
+  const nativeRect = {type:'rect', x:point(rect.left), y:point(rect.top),
+    width:point(rect.width), height:point(rect.height), viewportWidth:vw,
+    viewportHeight:vh, visible:rect.width > 0 && rect.height > 0};
+  const nativeRectKey = JSON.stringify(nativeRect);
+  if (nativeRectKey !== lastNativeRect) {
+    lastNativeRect = nativeRectKey;
+    nativeSend(nativeRect);
+  }
   // Punch an actual transparent hole through the website backgrounds, so the
   // hardware-decoded TextureView behind this transparent WebView is visible.
   // The native video remains independent of EPG and other site rendering.
@@ -76,10 +90,10 @@ if (AQUA_NATIVE) {
       updateDiagnostics();
     }
   };
-  window.addEventListener('resize', () => requestAnimationFrame(updateNativeVideoRect));
+  window.addEventListener('resize', () => scheduleNativeVideoRect());
   window.addEventListener('orientationchange', () => setTimeout(updateNativeVideoRect, 150));
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) requestAnimationFrame(updateNativeVideoRect);
+    if (!document.hidden) scheduleNativeVideoRect();
   });
   setInterval(() => { if (state?.activeId) updateNativeVideoRect(); }, 1200);
 }
@@ -501,8 +515,17 @@ function setGuide(open) {
     el('previewSlot').appendChild(shell); // move one video instead of restarting the HLS stream
     el('fullscreenStage').hidden = true;
     state.focusedId = state.activeId;
-    renderAll();
-    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
+    // Show the guide immediately, but avoid rebuilding every DOM row in the same
+    // frame that WebView/TextureView changes size. Keep existing DOM until paint.
+    if (AQUA_NATIVE) {
+      scheduleNativeVideoRect();
+      requestAnimationFrame(() => {
+        renderAll();
+        scheduleNativeVideoRect();
+      });
+    } else {
+      renderAll();
+    }
     requestAnimationFrame(() => {
       const selected = el('channelList').querySelector('.channel-row.focused');
       selected?.scrollIntoView({ block: 'nearest' });
@@ -513,7 +536,7 @@ function setGuide(open) {
     el('fullscreenStage').prepend(shell);
     el('guideView').hidden = true;
     revealInfoBar();
-    if (AQUA_NATIVE) requestAnimationFrame(updateNativeVideoRect);
+    if (AQUA_NATIVE) scheduleNativeVideoRect();
   }
 }
 function syncMuteButton() {
@@ -705,7 +728,7 @@ function playChannel(channel, initial = false) {
     // No browser hls.js, MediaSource, or WebView fetch is used for video.
     el('playerPlaceholder').hidden = true;
     nativeSend({ type:'play', url:src });
-    requestAnimationFrame(updateNativeVideoRect);
+    scheduleNativeVideoRect();
     updateDiagnostics();
     return;
   }
@@ -1700,7 +1723,7 @@ function wireEvents() {
 async function boot() {
   applyFontSize(state.fontPx);
   wireEvents();
-  if (AQUA_NATIVE && window.ResizeObserver) new ResizeObserver(updateNativeVideoRect).observe(shell);
+  if (AQUA_NATIVE && window.ResizeObserver) new ResizeObserver(scheduleNativeVideoRect).observe(shell);
   clockTick();
   syncMuteButton();
   const startupText = el('startupText');
